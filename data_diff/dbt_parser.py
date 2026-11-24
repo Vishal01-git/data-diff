@@ -9,7 +9,10 @@ import yaml
 from pydantic import BaseModel
 
 from packaging.version import parse as parse_version
-from dbt.config.renderer import ProfileRenderer
+try:
+    from dbt.config.renderer import ProfileRenderer
+except ImportError:
+    ProfileRenderer = None
 from data_diff.dbt_config_validators import ManifestJsonConfig, RunResultsJsonConfig
 
 from data_diff.errors import (

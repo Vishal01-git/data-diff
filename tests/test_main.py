@@ -9,6 +9,10 @@ from tests.common import CONN_STRINGS, get_conn, DiffTestCase
 
 
 class TestGetDBS(unittest.TestCase):
+    def setUp(self) -> None:
+        if db.PostgreSQL not in CONN_STRINGS or db.MySQL not in CONN_STRINGS:
+            raise unittest.SkipTest("PostgreSQL or MySQL not configured")
+
     def test__get_dbs(self) -> None:
         db1: Database
         db2: Database
@@ -101,10 +105,13 @@ class TestGetDBS(unittest.TestCase):
 
 class TestSetAge(unittest.TestCase):
     def setUp(self) -> None:
+        if db.PostgreSQL not in CONN_STRINGS:
+            raise unittest.SkipTest("PostgreSQL not configured")
         self.database: Database = get_conn(db.PostgreSQL)
 
     def tearDown(self):
-        self.database.close()
+        if hasattr(self, "database") and self.database:
+            self.database.close()
 
     def test__set_age(self):
         options = {}
@@ -134,6 +141,10 @@ class TestSetAge(unittest.TestCase):
 
 
 class TestGetTableDiffer(unittest.TestCase):
+    def setUp(self) -> None:
+        if db.PostgreSQL not in CONN_STRINGS or db.MySQL not in CONN_STRINGS:
+            raise unittest.SkipTest("PostgreSQL or MySQL not configured")
+
     def test__get_table_differ(self):
         db1: Database
         db2: Database

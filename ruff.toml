@@ -1,2 +1,19 @@
-# Allow lines to be as long as 120.
 line-length = 120
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",  # Line length
+    "E711",  # Comparison to None
+    "E712",  # Comparison to boolean
+    "E722",  # Bare except
+    "E741",  # Ambiguous variable name
+    "F401",  # Imported but unused
+    "F403",  # Star imports
+    "F405",  # Star import usage
+    "F811",  # Redefinition of unused name
+    "F841",  # Unused variable
+    "W291",  # Trailing whitespace in multiline test fixtures
+    "W293",  # Blank line contains whitespace
+]

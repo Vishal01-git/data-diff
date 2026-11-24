@@ -1,7 +1,7 @@
 import uuid
 
 from data_diff.abcs.database_types import String_UUID
-from data_diff.databases import MySQL
+from data_diff.databases import DuckDB
 from data_diff.table_segment import create_mesh_from_points
 from data_diff.utils import ArithUUID, safezip
 from tests.common import DiffTestCase, table_segment
@@ -9,7 +9,7 @@ from tests.common import DiffTestCase, table_segment
 
 # We do not need real tables, just any reference to them for proper object creation.
 class TestDiffMesh(DiffTestCase):
-    db_cls = MySQL
+    db_cls = DuckDB
 
     def test_meta_parameters_passed_from_coltypes_to_values(self):
         key_types1 = [String_UUID(lowercase=True, uppercase=False)]

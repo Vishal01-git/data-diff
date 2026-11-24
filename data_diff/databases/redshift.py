@@ -46,7 +46,7 @@ class Dialect(PostgresqlDialect):
 
     def type_repr(self, t) -> str:
         if isinstance(t, TimestampTZ):
-            return f"timestamptz"
+            return "timestamptz"
         return super().type_repr(t)
 
     def md5_as_int(self, s: str) -> str:
@@ -133,14 +133,14 @@ class Redshift(PostgreSQL):
         return (
             f"""
             select
-            	distinct
+                distinct
                 column_name,
-            	data_type,
-            	datetime_precision,
-            	numeric_precision,
-            	numeric_scale
+                data_type,
+                datetime_precision,
+                numeric_precision,
+                numeric_scale
             from
-            	svv_columns
+                svv_columns
             where table_name = '{table.lower()}' and table_schema = '{schema.lower()}'
             """
             + db_clause

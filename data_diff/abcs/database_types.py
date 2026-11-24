@@ -5,12 +5,12 @@ from datetime import datetime
 
 import attrs
 
-from data_diff.utils import ArithAlphanumeric, ArithUUID, Unknown
-
-
 DbPath = Tuple[str, ...]
-DbKey = Union[int, str, bytes, ArithUUID, ArithAlphanumeric]
 DbTime = datetime
+
+from data_diff.utils import ArithAlphanumeric, ArithUUID, Unknown  # noqa: E402
+
+DbKey = Union[int, str, bytes, ArithUUID, ArithAlphanumeric]
 
 N = TypeVar("N")
 

@@ -12,7 +12,7 @@ from data_diff.utils import eval_name_template, Vector
 
 
 def connect_to_table(
-    db_info: Union[str, dict],
+    db_info: Union[str, dict, Database],
     table_name: Union[DbPath, str],
     key_columns: str = ("id",),
     thread_count: Optional[int] = 1,
@@ -21,7 +21,7 @@ def connect_to_table(
     """Connects to the given database, and creates a TableSegment instance
 
     Parameters:
-        db_info: Either a URI string, or a dict of connection options.
+        db_info: Either a URI string, a dict of connection options, or an existing Database instance.
         table_name: Name of the table as a string, or a tuple that signifies the path.
         key_columns: Names of the key columns
         thread_count: Number of threads for this connection (only if using a threadpooled db implementation)
@@ -32,7 +32,10 @@ def connect_to_table(
     if isinstance(key_columns, str):
         key_columns = (key_columns,)
 
-    db: Database = connect(db_info, thread_count=thread_count)
+    if isinstance(db_info, Database):
+        db = db_info
+    else:
+        db = connect(db_info, thread_count=thread_count)
 
     if isinstance(table_name, str):
         table_name = db.dialect.parse_table_name(table_name)

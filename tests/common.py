@@ -22,8 +22,8 @@ from data_diff.query_utils import drop_table
 tracking.disable_tracking()
 
 # We write 'or None' because Github sometimes creates empty env vars for secrets
-TEST_MYSQL_CONN_STRING: str = "mysql://mysql:Password1@localhost/mysql"
-TEST_POSTGRESQL_CONN_STRING: str = "postgresql://postgres:Password1@localhost/postgres"
+TEST_MYSQL_CONN_STRING: str = os.environ.get("DATADIFF_MYSQL_URI") or None
+TEST_POSTGRESQL_CONN_STRING: str = os.environ.get("DATADIFF_POSTGRESQL_URI") or None
 TEST_SNOWFLAKE_CONN_STRING: str = os.environ.get("DATADIFF_SNOWFLAKE_URI") or None
 TEST_PRESTO_CONN_STRING: str = os.environ.get("DATADIFF_PRESTO_URI") or None
 TEST_BIGQUERY_CONN_STRING: str = os.environ.get("DATADIFF_BIGQUERY_URI") or None
@@ -87,6 +87,8 @@ CONN_STRINGS = {
 
 
 def get_conn(cls: type) -> Database:
+    if cls not in CONN_STRINGS:
+        raise unittest.SkipTest(f"{cls.__name__} connection is not configured")
     return connect(CONN_STRINGS[cls], N_THREADS)
 
 
@@ -173,7 +175,11 @@ def test_each_database_in_list(databases) -> Callable:
     def _test_per_database(cls):
         return _parameterized_class_per_conn(databases)(cls)
 
+    _test_per_database.__test__ = False
     return _test_per_database
+
+
+test_each_database_in_list.__test__ = False
 
 
 def table_segment(database, table_path, key_columns, *args, **kw):

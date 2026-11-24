@@ -1,0 +1,118 @@
+# Default cross-dialect canonical type matrix
+# Used by Tier 2 Cross-Dialect Schema Validator
+
+canonical_types:
+  STRING:
+    athena: ["varchar", "string", "char"]
+    maxcompute: ["string", "varchar", "char"]
+    postgresql: ["text", "varchar", "char", "character varying", "bpchar"]
+    mssql: ["varchar", "nvarchar", "char", "nchar", "text", "ntext"]
+    mysql: ["varchar", "char", "text", "mediumtext", "longtext"]
+    duckdb: ["varchar", "text", "string"]
+
+  INT64:
+    athena: ["bigint"]
+    maxcompute: ["bigint"]
+    postgresql: ["bigint", "int8"]
+    mssql: ["bigint"]
+    mysql: ["bigint"]
+    duckdb: ["bigint", "int8"]
+
+  INT32:
+    athena: ["integer", "int"]
+    maxcompute: ["int", "integer"]
+    postgresql: ["integer", "int", "int4"]
+    mssql: ["int", "integer"]
+    mysql: ["int", "integer", "mediumint"]
+    duckdb: ["integer", "int", "int4"]
+
+  INT16:
+    athena: ["smallint"]
+    maxcompute: ["smallint"]
+    postgresql: ["smallint", "int2"]
+    mssql: ["smallint"]
+    mysql: ["smallint"]
+    duckdb: ["smallint", "int2"]
+
+  INT8:
+    athena: ["tinyint"]
+    maxcompute: ["tinyint"]
+    postgresql: ["int2"]
+    mssql: ["tinyint"]
+    mysql: ["tinyint"]
+    duckdb: ["tinyint", "int1"]
+
+  FLOAT64:
+    athena: ["double"]
+    maxcompute: ["double"]
+    postgresql: ["double precision", "float8"]
+    mssql: ["float"]
+    mysql: ["double", "float"]
+    duckdb: ["double", "float8"]
+
+  FLOAT32:
+    athena: ["real", "float"]
+    maxcompute: ["float"]
+    postgresql: ["real", "float4"]
+    mssql: ["real"]
+    mysql: ["float"]
+    duckdb: ["float", "float4", "real"]
+
+  DECIMAL:
+    athena: ["decimal"]
+    maxcompute: ["decimal"]
+    postgresql: ["numeric", "decimal"]
+    mssql: ["decimal", "numeric", "money", "smallmoney"]
+    mysql: ["decimal", "numeric"]
+    duckdb: ["decimal", "numeric"]
+
+  TIMESTAMP:
+    athena: ["timestamp", "timestamp with time zone", "timestamp without time zone"]
+    maxcompute: ["datetime", "timestamp"]
+    postgresql: ["timestamp", "timestamptz", "timestamp with time zone", "timestamp without time zone"]
+    mssql: ["datetime", "datetime2", "datetimeoffset", "smalldatetime"]
+    mysql: ["timestamp", "datetime"]
+    duckdb: ["timestamp", "timestamptz", "timestamp with time zone"]
+
+  DATE:
+    athena: ["date"]
+    maxcompute: ["date"]
+    postgresql: ["date"]
+    mssql: ["date"]
+    mysql: ["date"]
+    duckdb: ["date"]
+
+  BOOLEAN:
+    athena: ["boolean"]
+    maxcompute: ["boolean"]
+    postgresql: ["boolean", "bool"]
+    mssql: ["bit"]
+    mysql: ["tinyint", "boolean", "bool"]
+    duckdb: ["boolean", "bool"]
+
+  BINARY:
+    athena: ["varbinary", "binary"]
+    maxcompute: ["binary"]
+    postgresql: ["bytea"]
+    mssql: ["varbinary", "binary", "image"]
+    mysql: ["varbinary", "binary", "blob"]
+    duckdb: ["blob", "bytea", "varbinary"]
+
+  JSON:
+    athena: ["json"]
+    maxcompute: ["json"]
+    postgresql: ["json", "jsonb"]
+    mssql: ["nvarchar", "json"]
+    mysql: ["json"]
+    duckdb: ["json"]
+
+# Compatibility matrix for widening vs narrowing type promotions
+# Target type -> allowed source types that can be widened into target without data loss
+type_widening:
+  INT64: ["INT32", "INT16", "INT8"]
+  INT32: ["INT16", "INT8"]
+  INT16: ["INT8"]
+  FLOAT64: ["FLOAT32", "INT32", "INT16", "INT8"]
+  FLOAT32: ["INT16", "INT8"]
+  DECIMAL: ["INT64", "INT32", "INT16", "INT8"]
+  STRING: ["INT64", "INT32", "INT16", "INT8", "FLOAT64", "FLOAT32", "DECIMAL", "DATE", "TIMESTAMP", "BOOLEAN"]

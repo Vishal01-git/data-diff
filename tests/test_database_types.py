@@ -591,7 +591,7 @@ def _insert_to_table(conn, table_path, values, coltype):
         assert BENCHMARK, "Table should've been deleted, or we should be in BENCHMARK mode"
         return
     elif current_n_rows > 0:
-        conn.query(drop_table(table_name))
+        drop_table(conn, table_path)
         _create_table_with_indexes(conn, table_path, coltype)
 
     # if BENCHMARK and N_SAMPLES > 10_000:
@@ -673,12 +673,14 @@ class TestDiffCrossDatabaseTables(unittest.TestCase):
 
     def tearDown(self) -> None:
         if not BENCHMARK:
-            drop_table(self.src_conn, self.src_table_path)
-            drop_table(self.dst_conn, self.dst_table_path)
+            if hasattr(self, "src_conn"):
+                drop_table(self.src_conn, self.src_table_path)
+            if hasattr(self, "dst_conn"):
+                drop_table(self.dst_conn, self.dst_table_path)
 
         return super().tearDown()
 
-    @parameterized.expand(type_pairs, name_func=expand_params)
+    @parameterized.expand(type_pairs, name_func=expand_params, skip_on_empty=True)
     def test_types(self, source_db, target_db, source_type, target_type, type_category):
         start = time.monotonic()
 

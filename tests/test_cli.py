@@ -1,6 +1,7 @@
 import logging
 import subprocess
 import sys
+import unittest
 from datetime import datetime, timedelta
 
 from data_diff.queries.api import commit, current_timestamp
@@ -23,6 +24,12 @@ def run_datadiff_cli(*args):
     if stderr:
         raise Exception(stderr)
     return stdout.splitlines()
+
+
+class TestCLIBasic(unittest.TestCase):
+    def test_version(self):
+        output = run_datadiff_cli("--version")
+        self.assertTrue(any(line.startswith(b"v") or b"data-diff" in line for line in output))
 
 
 @test_each_database

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIT Data Reconciliation Report — {{ result.run_name }}</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --pass: #10b981;
+      --fail: #ef4444;
+      --warn: #f59e0b;
+      --info: #3b82f6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      padding: 2rem;
+      line-height: 1.5;
+    }
+    .container { max-width: 1300px; margin: 0 auto; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { font-size: 1.8rem; font-weight: 700; }
+    .status-badge {
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-pass { background-color: rgba(16, 185, 129, 0.2); color: var(--pass); border: 1px solid var(--pass); }
+    .badge-fail { background-color: rgba(239, 68, 68, 0.2); color: var(--fail); border: 1px solid var(--fail); }
+    .badge-warn { background-color: rgba(245, 158, 11, 0.2); color: var(--warn); border: 1px solid var(--warn); }
+    .badge-skip { background-color: rgba(148, 163, 184, 0.2); color: var(--text-muted); border: 1px solid var(--text-muted); }
+    
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .card-label { font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .card-val { font-size: 1.8rem; font-weight: 700; }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      align-items: center;
+    }
+    input[type="text"] {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      flex-grow: 1;
+      outline: none;
+    }
+    select {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      outline: none;
+    }
+
+    .table-item {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+    .table-header {
+      padding: 1rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .table-header:hover { background-color: rgba(255, 255, 255, 0.02); }
+    .table-title { display: flex; align-items: center; gap: 0.75rem; font-weight: 600; font-size: 1.1rem; }
+    .table-meta { color: var(--text-muted); font-size: 0.85rem; }
+
+    .table-body {
+      padding: 1.25rem;
+      border-top: 1px solid var(--border);
+      background-color: rgba(15, 23, 42, 0.4);
+      display: none;
+    }
+    .table-body.open { display: block; }
+
+    .tier-section { margin-bottom: 1.5rem; }
+    .tier-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--info); display: flex; align-items: center; gap: 0.5rem; }
+
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-top: 0.5rem;
+    }
+    table.data-table th, table.data-table td {
+      padding: 0.6rem 0.8rem;
+      border: 1px solid var(--border);
+      text-align: left;
+    }
+    table.data-table th { background-color: var(--card-bg); color: var(--text-muted); }
+    table.data-table tr:nth-child(even) { background-color: rgba(255, 255, 255, 0.02); }
+
+    .diff-minus { color: var(--fail); }
+    .diff-plus { color: var(--pass); }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div>
+      <h1>SIT Data Reconciliation Report</h1>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem;">
+        Run: <strong>{{ result.run_name }}</strong> &bull; Completed: {{ result.end_time_iso }}
+      </p>
+    </div>
+    <div>
+      {% if result.overall_status == 'PASSED' %}
+        <span class="status-badge badge-pass">PASSED</span>
+      {% else %}
+        <span class="status-badge badge-fail">FAILED</span>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="summary-grid">
+    <div class="card">
+      <div class="card-label">Total Tables</div>
+      <div class="card-val">{{ result.total_tables }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Passed</div>
+      <div class="card-val" style="color: var(--pass);">{{ result.passed_tables }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Failed</div>
+      <div class="card-val" style="color: var(--fail);">{{ result.failed_tables }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Skipped</div>
+      <div class="card-val" style="color: var(--text-muted);">{{ result.skipped_tables }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Rows</div>
+      <div class="card-val">{{ "{:,}".format(result.total_rows_compared) }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Duration</div>
+      <div class="card-val">{{ result.total_duration_seconds }}s</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Bytes Scanned</div>
+      <div class="card-val">{{ "{:,}".format(result.total_bytes_scanned or 0) }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Queries</div>
+      <div class="card-val">{{ result.total_queries or 0 }}</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <input type="text" id="searchInput" placeholder="Search table name..." onkeyup="filterTables()">
+    <select id="statusFilter" onchange="filterTables()">
+      <option value="ALL">All Statuses</option>
+      <option value="PASSED">Passed</option>
+      <option value="FAILED">Failed</option>
+      <option value="SKIPPED">Skipped</option>
+    </select>
+  </div>
+
+  <div id="tableList">
+    {% for tbl in result.table_results %}
+      <div class="table-item" data-name="{{ tbl.table_name | lower }}" data-status="{{ tbl.status }}">
+        <div class="table-header" onclick="toggleDetails(this)">
+          <div class="table-title">
+            <span>{{ tbl.table_name }}</span>
+            {% if tbl.status == 'PASSED' %}
+              <span class="status-badge badge-pass">PASSED</span>
+            {% elif tbl.status == 'SKIPPED' %}
+              <span class="status-badge badge-skip">SKIPPED</span>
+            {% else %}
+              <span class="status-badge badge-fail">FAILED</span>
+            {% endif %}
+          </div>
+          <div class="table-meta">
+            {{ tbl.source_table }} &rarr; {{ tbl.target_table }} &bull; {{ tbl.execution_time_seconds }}s
+          </div>
+        </div>
+
+        <div class="table-body">
+          {% if tbl.error_message %}
+            <div style="padding: 1rem; background-color: rgba(239, 68, 68, 0.1); border: 1px solid var(--fail); border-radius: 6px; margin-bottom: 1rem; color: var(--fail);">
+              <strong>Execution Error:</strong> {{ tbl.error_message }}
+            </div>
+          {% endif %}
+
+          <!-- Tier 1: Count & Volume -->
+          {% if tbl.count_result %}
+            <div class="tier-section">
+              <div class="tier-title">Tier 1 &mdash; Count &amp; Volume Validation</div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Source Count</th>
+                    <th>Target Count</th>
+                    <th>Delta</th>
+                    <th>Delta %</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>{{ "{:,}".format(tbl.count_result.source_total_count) }}</td>
+                    <td>{{ "{:,}".format(tbl.count_result.target_total_count) }}</td>
+                    <td>{{ "{:+,}".format(tbl.count_result.count_diff) }}</td>
+                    <td>{{ tbl.count_result.count_diff_pct }}%</td>
+                    <td>
+                      {% if tbl.count_result.passed %}
+                        <span style="color: var(--pass);">MATCH</span>
+                      {% else %}
+                        <span style="color: var(--fail);">MISMATCH</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {% if tbl.count_result.partition_diffs %}
+                <h5 style="margin-top: 1rem; margin-bottom: 0.5rem; color: var(--text-muted);">Partition Breakdown ({{ tbl.count_result.partition_column }})</h5>
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Partition</th>
+                      <th>Source Count</th>
+                      <th>Target Count</th>
+                      <th>Delta</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for p in tbl.count_result.partition_diffs %}
+                      <tr>
+                        <td>{{ p.partition_key }}</td>
+                        <td>{{ p.source_count if p.source_count is not none else 'N/A' }}</td>
+                        <td>{{ p.target_count if p.target_count is not none else 'N/A' }}</td>
+                        <td>{{ "{:+,}".format(p.diff) }}</td>
+                        <td>
+                          {% if p.status == 'MATCH' %}
+                            <span style="color: var(--pass);">MATCH</span>
+                          {% else %}
+                            <span style="color: var(--fail);">{{ p.status }}</span>
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          <!-- Tier 2: Schema Validation -->
+          {% if tbl.schema_result %}
+            <div class="tier-section">
+              <div class="tier-title">Tier 2 &mdash; Cross-Dialect Schema Validation</div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Column</th>
+                    <th>Source Type</th>
+                    <th>Target Type</th>
+                    <th>Canonical Type</th>
+                    <th>Diff Type</th>
+                    <th>Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for s in tbl.schema_result.column_diffs %}
+                    <tr>
+                      <td>{{ s.column_name }}</td>
+                      <td>{{ s.source_raw_type or '-' }}</td>
+                      <td>{{ s.target_raw_type or '-' }}</td>
+                      <td>{{ s.source_canonical_type or s.target_canonical_type }}</td>
+                      <td>
+                        {% if s.severity == 'OK' %}
+                          <span style="color: var(--pass);">{{ s.diff_type }}</span>
+                        {% elif s.severity == 'WARN' %}
+                          <span style="color: var(--warn);">{{ s.diff_type }}</span>
+                        {% else %}
+                          <span style="color: var(--fail);">{{ s.diff_type }}</span>
+                        {% endif %}
+                      </td>
+                      <td>{{ s.message }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
+
+          <!-- Tier 3: Data Diff -->
+          {% if tbl.data_result %}
+            <div class="tier-section">
+              <div class="tier-title">Tier 3 &mdash; Row-Level Data Validation ({{ tbl.data_result.mode_used }})</div>
+              <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;">
+                Rows Compared: {{ "{:,}".format(tbl.data_result.total_rows_compared) }} &bull;
+                Mismatches: <strong style="color: {{ 'var(--pass)' if tbl.data_result.passed else 'var(--fail)' }}">{{ tbl.data_result.differing_rows_count }}</strong>
+                {% if tbl.data_result.total_buckets %}
+                  &bull; Buckets: {{ tbl.data_result.total_buckets - tbl.data_result.differing_buckets_count }}/{{ tbl.data_result.total_buckets }} matching
+                {% endif %}
+              </p>
+
+              {% if tbl.data_result.mismatch_samples %}
+                <h5 style="margin-top: 1rem; margin-bottom: 0.5rem; color: var(--fail);">Mismatch Samples (Top {{ tbl.data_result.mismatch_samples | length }})</h5>
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Primary Key</th>
+                      <th>Column Differences (Source &rarr; Target)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for m in tbl.data_result.mismatch_samples %}
+                      <tr>
+                        <td>
+                          {% if m.diff_type == 'EXCLUSIVE_SOURCE' %}
+                            <span class="diff-minus">MISSING IN TARGET</span>
+                          {% elif m.diff_type == 'EXCLUSIVE_TARGET' %}
+                            <span class="diff-plus">EXTRA IN TARGET</span>
+                          {% else %}
+                            <span style="color: var(--warn);">VALUE DIFF</span>
+                          {% endif %}
+                        </td>
+                        <td>{{ m.key_values }}</td>
+                        <td>
+                          {% if m.column_diffs %}
+                            {% if result.include_sample_values %}
+                              {% for col, vals in m.column_diffs.items() %}
+                                <div><strong>{{ col }}:</strong> <span class="diff-minus">{{ vals[0] }}</span> &rarr; <span class="diff-plus">{{ vals[1] }}</span></div>
+                              {% endfor %}
+                            {% else %}
+                              {% for col, vals in m.column_diffs.items() %}
+                                <div><strong>{{ col }}:</strong> <span style="color: var(--warn);">[VALUE DIFF - REDACTED]</span></div>
+                              {% endfor %}
+                            {% endif %}
+                          {% else %}
+                            -
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+  function toggleDetails(header) {
+    const body = header.nextElementSibling;
+    body.classList.toggle('open');
+  }
+
+  function filterTables() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const st = document.getElementById('statusFilter').value;
+    const items = document.querySelectorAll('.table-item');
+
+    items.forEach(el => {
+      const name = el.getAttribute('data-name');
+      const status = el.getAttribute('data-status');
+      const matchName = !q || name.includes(q);
+      const matchStatus = (st === 'ALL') || (status === st);
+      el.style.display = (matchName && matchStatus) ? 'block' : 'none';
+    });
+  }
+</script>
+</body>
+</html>

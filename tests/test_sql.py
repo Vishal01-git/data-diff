@@ -2,16 +2,14 @@ import unittest
 
 import attrs
 
-from tests.common import TEST_MYSQL_CONN_STRING
-
-from data_diff.databases import connect
+from data_diff.databases.mysql import MySQL
 from data_diff.databases.base import Compiler
 from data_diff.queries.api import Count, Explain, Select, table, In, BinOp, Code
 
 
 class TestSQL(unittest.TestCase):
     def setUp(self):
-        self.mysql = connect(TEST_MYSQL_CONN_STRING)
+        self.mysql = MySQL(thread_count=1, database="test")
         self.compiler = Compiler(self.mysql)
 
     def test_compile_string(self):

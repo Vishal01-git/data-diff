@@ -76,7 +76,7 @@ class Dialect(BaseDialect):
 
     def type_repr(self, t) -> str:
         if isinstance(t, TimestampTZ):
-            return f"timestamp with time zone"
+            return "timestamp with time zone"
 
         try:
             return {float: "REAL"}[t]

@@ -1,0 +1,53 @@
+version: "1.0"
+run_name: "glue_to_maxcompute_sit_batch_01"
+
+connections:
+  aws_glue_prod:
+    type: athena
+    region: "${AWS_REGION}"
+    s3_staging_dir: "${ATHENA_S3_STAGING}"
+    workgroup: "primary"
+    catalog: "AwsDataCatalog"
+    max_concurrency: 5
+
+  ali_mc_sit:
+    type: maxcompute
+    endpoint: "${ODPS_ENDPOINT}"
+    project: "${ODPS_PROJECT}"
+    access_id: "${ODPS_ACCESS_ID}"
+    access_key: "${ODPS_ACCESS_KEY}"
+    allow_fullscan: false
+    max_concurrency: 5
+
+defaults:
+  tiers: ["count", "schema", "data"]
+  fail_fast:
+    skip_data_on_schema_fail: true
+    skip_data_if_count_diff_pct_gt: 50.0
+  data_diff:
+    mode: "auto"                      # auto | hashdiff | joindiff | bucket_hash
+    bucket_count: 64                  # Used when mode == bucket_hash
+    float_abs_tol: 0.0001
+    normalize_timestamps_utc: true
+    treat_empty_string_as_null: false
+    max_mismatch_samples: 100
+  reporting:
+    output_dir: "./reports"
+    formats: ["html", "json", "csv", "junit"]
+    include_sample_values: false      # PII safety default; override via CLI flag
+
+tables:
+  - name: "orders_fact"
+    source:
+      connection: aws_glue_prod
+      table: "sales_db.orders"
+      where: "dt >= '2026-10-01'"
+    target:
+      connection: ali_mc_sit
+      table: "sales_sit.orders"
+      where: "dt >= '2026-10-01'"
+    primary_keys: ["order_id"]
+    partition_column: "dt"
+    exclude_columns: ["etl_loaded_at"]
+    column_mapping:
+      order_amt: "order_amount"       # Optional explicit rename mapping

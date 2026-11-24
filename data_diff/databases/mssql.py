@@ -154,11 +154,18 @@ class Dialect(BaseDialect):
 
         return f"FORMAT({value}, 'N{coltype.precision}')"
 
+    def normalize_boolean(self, value: str, _coltype: Boolean) -> str:
+        return f"CASE WHEN {value} = 1 THEN '1' ELSE '0' END"
+
     def md5_as_int(self, s: str) -> str:
-        return f"convert(bigint, convert(varbinary, '0x' + RIGHT(CONVERT(NVARCHAR(32), HashBytes('MD5', {s}), 2), {CHECKSUM_HEXDIGITS}), 1)) - {CHECKSUM_OFFSET}"
+        return (
+            f"convert(bigint, convert(varbinary, '0x' + "
+            f"RIGHT(CONVERT(NVARCHAR(32), HashBytes('MD5', CAST({s} AS VARCHAR(MAX))), 2), {CHECKSUM_HEXDIGITS}), 1))"
+            f" - {CHECKSUM_OFFSET}"
+        )
 
     def md5_as_hex(self, s: str) -> str:
-        return f"HashBytes('MD5', {s})"
+        return f"CONVERT(NVARCHAR(32), HashBytes('MD5', CAST({s} AS VARCHAR(MAX))), 2)"
 
 
 @attrs.define(frozen=False, init=False, kw_only=True)

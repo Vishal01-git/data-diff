@@ -29,6 +29,7 @@ TEST_DATABASES = {
 }
 
 test_each_database: Callable = test_each_database_in_list(TEST_DATABASES)
+test_each_database.__test__ = False
 
 
 class TestUtils(unittest.TestCase):

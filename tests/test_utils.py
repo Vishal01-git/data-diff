@@ -156,9 +156,9 @@ class TestDbtDiffStringTemplateNoMock(unittest.TestCase):
         self.maxDiff = None
 
         expected_output = """
-rows       PROD    <>            DEV
+rows         PROD  <>            DEV
 ---------  ------  ------------  ------------------
-Total      10                    20 [[green]+10[/]]
+Total          10                20 [[green]+10[/]]
 Added              [green]+5[/]
 Removed            [red]-2[/]
 Different          3

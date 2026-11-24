@@ -48,6 +48,8 @@ nosetests.xml
 coverage.xml
 *.cover
 *.py,cover
+.validator_state/
+reports/
 .hypothesis/
 .pytest_cache/
 

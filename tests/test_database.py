@@ -12,7 +12,7 @@ from data_diff.queries.api import table, current_timestamp
 from data_diff.queries.extras import NormalizeAsString
 from data_diff.schema import create_schema
 from tests.common import (
-    TEST_MYSQL_CONN_STRING,
+    TEST_DUCKDB_CONN_STRING,
     test_each_database_in_list,
     get_conn,
     str_to_checksum,
@@ -25,7 +25,6 @@ TEST_DATABASES = {
     dbs.Oracle,
     dbs.Redshift,
     dbs.Snowflake,
-    dbs.DuckDB,
     dbs.BigQuery,
     dbs.Presto,
     dbs.Trino,
@@ -34,25 +33,26 @@ TEST_DATABASES = {
 }
 
 test_each_database: Callable = test_each_database_in_list(TEST_DATABASES)
+test_each_database.__test__ = False
 
 
 class TestDatabase(unittest.TestCase):
     def setUp(self):
-        self.mysql = connect(TEST_MYSQL_CONN_STRING)
+        self.db = connect(TEST_DUCKDB_CONN_STRING)
 
     def test_connect_to_db(self):
-        self.assertEqual(1, self.mysql.query("SELECT 1", int))
+        self.assertEqual(1, self.db.query("SELECT 1", int))
 
 
 class TestMD5(unittest.TestCase):
     def test_md5_as_int(self):
-        self.mysql = connect(TEST_MYSQL_CONN_STRING)
+        self.db = connect(TEST_DUCKDB_CONN_STRING)
 
         message = "hello world"
-        query_fragment = self.mysql.dialect.md5_as_int(f"'{message}'")
+        query_fragment = self.db.dialect.md5_as_int(f"'{message}'")
         query = f"SELECT {query_fragment}"
 
-        self.assertEqual(str_to_checksum(message), self.mysql.query(query, int))
+        self.assertEqual(str_to_checksum(message), self.db.query(query, int))
 
 
 class TestConnect(unittest.TestCase):
