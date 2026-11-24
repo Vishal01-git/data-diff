@@ -95,6 +95,7 @@ class ConnectionResolver:
                 catalog=cfg.catalog or "AwsDataCatalog",
                 aws_access_key_id=cfg.user,
                 aws_secret_access_key=cfg.password,
+                aws_session_token=getattr(cfg, "session_token", None) or getattr(cfg, "aws_session_token", None),
                 role_arn=cfg.role_arn,
                 profile_name=cfg.profile_name,
             )

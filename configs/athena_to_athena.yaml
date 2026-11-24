@@ -1,0 +1,74 @@
+# ==============================================================================
+# Athena-to-Athena SIT Validation Manifest
+# Use this configuration to test reconciliation between two Athena tables
+# or two environments (e.g., dev vs prod, raw vs curated, or table-to-itself).
+# ==============================================================================
+version: "1.0"
+run_name: "athena_parity_test_run"
+
+# ------------------------------------------------------------------------------
+# Connection Endpoints (Using Okta Authenticated AWS Profiles)
+# ------------------------------------------------------------------------------
+connections:
+  # Source Athena Connection
+  athena_source:
+    type: athena
+    region: "${AWS_REGION:-us-east-1}"
+    s3_staging_dir: "${ATHENA_S3_STAGING:-s3://your-athena-query-results-bucket/staging/}"
+    workgroup: "primary"
+    catalog: "AwsDataCatalog"
+    # Option 1 (Recommended for Okta): AWS Named Profile from Okta login
+    # Run your Okta CLI (e.g., `saml2aws login`, `gimme-aws-creds`, or `aws sso login`) first
+    profile_name: "${AWS_PROFILE:-default}"
+    # Option 2: If Okta exports temporary session tokens into your terminal:
+    # user: "${AWS_ACCESS_KEY_ID}"
+    # password: "${AWS_SECRET_ACCESS_KEY}"
+    # session_token: "${AWS_SESSION_TOKEN}"
+    max_concurrency: 4
+
+  # Target Athena Connection (Can point to the same or different catalog/database)
+  athena_target:
+    type: athena
+    region: "${AWS_REGION:-us-east-1}"
+    s3_staging_dir: "${ATHENA_S3_STAGING:-s3://your-athena-query-results-bucket/staging/}"
+    workgroup: "primary"
+    catalog: "AwsDataCatalog"
+    profile_name: "${AWS_PROFILE:-default}"
+    max_concurrency: 4
+
+# ------------------------------------------------------------------------------
+# Global Defaults
+# ------------------------------------------------------------------------------
+defaults:
+  tiers: ["count", "schema", "data"]
+  fail_fast:
+    skip_data_on_schema_fail: true
+    skip_data_if_count_diff_pct_gt: 50.0
+  data_diff:
+    mode: "bucket_hash"               # High-speed single-scan bucket checksum (only 2 queries)
+    bucket_count: 64                  # 64 deterministic buckets
+    float_abs_tol: 0.0001
+    normalize_timestamps_utc: true
+    treat_empty_string_as_null: false
+    max_mismatch_samples: 100
+  reporting:
+    output_dir: "./reports"
+    formats: ["html", "json", "csv", "junit"]
+    include_sample_values: false      # Keeps PII safe by masking raw values in reports
+
+# ------------------------------------------------------------------------------
+# Tables to Reconcile
+# ------------------------------------------------------------------------------
+tables:
+  - name: "sample_athena_validation"
+    source:
+      connection: athena_source
+      table: "your_source_db.your_table_name"
+      # Optional WHERE filter or partition pruning:
+      # where: "dt >= '2026-10-01'"
+    target:
+      connection: athena_target
+      table: "your_target_db.your_table_name"
+      # where: "dt >= '2026-10-01'"
+    primary_keys: ["id"]              # Replace with your table's unique identifier column(s)
+    # partition_column: "dt"          # Optional: breaks down Tier 1 counts per partition

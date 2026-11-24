@@ -17,6 +17,8 @@ class ConnectionConfig(BaseModel):
     catalog: Optional[str] = "AwsDataCatalog"
     role_arn: Optional[str] = None
     profile_name: Optional[str] = None
+    session_token: Optional[str] = None
+    aws_session_token: Optional[str] = None
 
     # Cloud MaxCompute (ODPS) parameters
     endpoint: Optional[str] = None
