@@ -31,23 +31,57 @@ Welcome to **Data Validator**! This guide is written for engineers and analysts 
 
 ---
 
-## 🚀 Two Ways to Use the Tool
+## 🚀 Three Ways to Use the Tool
 
 ```
-                        ┌───────────────────────────────────────────────┐
-                        │             HOW DO YOU WANT TO WORK?           │
-                        └───────┬───────────────────────────────┬───────┘
-                                │                               │
-                     Quick Single-Table Check         Batch Multi-Table SIT Run
-                                │                               │
-                                ▼                               ▼
-                     METHOD 1: Direct CLI            METHOD 2: YAML Manifest
-                     (No files or YAML needed)       (Audit-ready HTML dashboard)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          HOW DO YOU WANT TO WORK?                           │
+├───────────────────────────────┬─────────────────────────────┬───────────────┤
+│    METHOD 1: WEB UI STUDIO    │    METHOD 2: DIRECT CLI     │ METHOD 3: YAML│
+│    (Point-and-Click Browser)  │    (Quick 1-Line Terminal)  │ (CI/CD Batch) │
+│    Run: data-validator ui     │    Run: data-validator diff │ data-validator│
+└───────────────────────────────┴─────────────────────────────┴───────────────┘
 ```
 
 ---
 
-## ⚡ Method 1: The Zero-File CLI Method (Instant Checks)
+## 🖥️ Method 1: The Point-and-Click Web UI Studio (`data-validator ui`)
+
+**Best for:** Business analysts, QA engineers, and anyone who wants an effortless visual interface without writing commands or editing files.
+
+### How to Launch the Web Studio:
+In PowerShell, simply run:
+```powershell
+data-validator ui
+```
+
+Your default browser will automatically open:
+👉 **`http://localhost:8501`**
+
+### What You Can Do in the Web Studio:
+1. **🔌 Connections Tab:**
+   - Select your database (`AWS Athena`, `PostgreSQL`, `SQL Server`, `Alibaba MaxCompute`, or `DuckDB`).
+   - For Athena, simply pick your **Okta AWS Profile** from the dropdown!
+   - Click `[Test Connection]` to verify connectivity and latency with a single click.
+2. **🎯 Reconciliation Studio Tab:**
+   - Select Source connection & Target connection.
+   - Enter your table names and primary keys.
+   - Click `[+ Add Table to Validation Batch]`. You can add 1, 5, or 50 tables to the batch queue!
+   - Click `[🚀 Run Batch Validation Now]` to run parity checks across all tables in parallel with live status spinners.
+3. **📊 Results Dashboard Tab:**
+   - View executive KPI cards (Pass/Fail stats, Total rows, Duration, Athena S3 Bytes Scanned).
+   - Filter and search tables in real-time.
+   - Click on any table to drill down into **Tier 1 (Count)**, **Tier 2 (Schema Types)**, and **Tier 3 (Row Data Diff)**.
+   - Download reports directly: `[Download HTML Report]`, `[Download CSV Mismatches]`, `[Download JSON]`, `[Download JUnit XML]`.
+4. **📑 Manifest Studio Tab:**
+   - Click `[Download Manifest YAML]` or `[Save to Local configs/]` to export your visual setup into a standard YAML file for CI/CD pipelines!
+   - Or upload any existing YAML file to load all connections and tables into the UI with one click.
+5. **📜 Run History Tab:**
+   - Browse past validation runs saved on your machine.
+
+---
+
+## ⚡ Method 2: The Zero-File CLI Method (Instant Checks)
 
 Use this method when you want to compare two tables on the fly without creating or editing any files.
 

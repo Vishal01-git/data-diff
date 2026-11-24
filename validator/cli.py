@@ -554,6 +554,46 @@ def check_counts(
         raise typer.Exit(code=1)
 
 
+@app.command(name="ui")
+def ui(
+    port: int = typer.Option(8501, "--port", "-p", help="Port to run Streamlit web server on."),
+    host: str = typer.Option("localhost", "--host", help="Host address to bind to."),
+) -> None:
+    """Launch the interactive web-based UI application in your browser."""
+    import subprocess
+    import sys
+
+    ui_script = Path(__file__).parent / "ui" / "app.py"
+    if not ui_script.exists():
+        console.print(f"[bold red]Error:[/bold red] Streamlit app script not found at {ui_script}")
+        raise typer.Exit(code=2)
+
+    console.print(
+        Panel.fit(
+            f"[bold cyan]Launching Data Validator Web Studio...[/bold cyan]\n"
+            f"URL: [green]http://{host}:{port}[/green]\n"
+            f"Press [bold yellow]Ctrl+C[/bold yellow] to stop the server.",
+            border_style="cyan",
+        )
+    )
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        str(ui_script),
+        "--server.port",
+        str(port),
+        "--server.address",
+        host,
+    ]
+    try:
+        subprocess.run(cmd)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Streamlit web server stopped.[/yellow]")
+
+
 def main() -> None:
     app()
 

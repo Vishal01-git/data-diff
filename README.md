@@ -103,9 +103,22 @@ Commands:
   diff             Run ad-hoc row-level data diff on a single table pair.
   check-schema     Run schema comparison between source and target tables.
   check-counts     Run row count and volume comparison between source and target tables.
+  ui               Launch the interactive web-based UI application in your browser.
 ```
 
-### 1. Batch SIT Validation (`run` or `validate`)
+### 1. Interactive Web Studio (`data-validator ui`)
+
+Launch the point-and-click browser interface designed for non-technical users, business analysts, and QA teams:
+
+```bash
+# Start the local Streamlit studio (opens http://localhost:8501 automatically)
+data-validator ui
+
+# Specify custom port or host
+data-validator ui --port 8501 --host localhost
+```
+
+### 2. Batch SIT Validation (`run` or `validate`)
 
 ```bash
 # Execute batch validation using a declarative manifest
