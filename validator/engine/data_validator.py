@@ -10,7 +10,13 @@ from pydantic import BaseModel, Field
 from data_diff import connect_to_table, diff_tables
 from data_diff.databases.base import Database
 from data_diff.diff_tables import Algorithm
-from validator.engine.normalizers import compare_floats, normalize_decimal_val, normalize_string_val, normalize_timestamp_val
+from validator.engine.normalizers import (
+    compare_floats,
+    normalize_decimal_val,
+    normalize_string_val,
+    normalize_timestamp_val,
+    sql_normalize_timestamp,
+)
 
 logger = logging.getLogger("validator.data")
 
@@ -46,19 +52,73 @@ class DataValidationResult(BaseModel):
     error: Optional[str] = None
 
 
-def get_concat_row_expr(db: Database, columns: Sequence[str]) -> str:
+def _col_to_safe_string_expr(db: Database, col_name: str, raw_type: Optional[str] = None) -> str:
+    """Convert a column to a NULL-safe, type-safe string SQL expression for hashing.
+
+    Handles binary/varbinary types (where CAST AS VARCHAR fails in Athena/Trino),
+    complex types (array/map/struct), timestamps, booleans, and wraps every column
+    in COALESCE(..., '<NULL>') to avoid NULL poisoning in row concatenation.
+    """
+    quoted_col = db.dialect.quote(col_name)
+    name = db.name.lower()
+    dtype = (raw_type or "").lower().strip()
+
+    if any(k in dtype for k in ("binary", "varbinary", "bytea", "blob")):
+        if name in ("athena", "trino", "presto"):
+            str_expr = f"to_hex({quoted_col})"
+        elif name in ("postgresql", "postgres"):
+            str_expr = f"encode({quoted_col}, 'hex')"
+        elif name in ("duckdb", "maxcompute", "odps"):
+            str_expr = f"hex({quoted_col})"
+        elif name in ("mssql", "sqlserver"):
+            str_expr = f"CONVERT(VARCHAR(MAX), {quoted_col}, 2)"
+        else:
+            str_expr = db.dialect.to_string(quoted_col)
+    elif any(dtype.startswith(k) for k in ("array", "map", "struct", "row", "json")):
+        if name in ("athena", "trino", "presto"):
+            str_expr = f"json_format(cast({quoted_col} as json))"
+        else:
+            str_expr = db.dialect.to_string(quoted_col)
+    elif any(k in dtype for k in ("timestamp", "datetime")):
+        str_expr = sql_normalize_timestamp(name, quoted_col, precision=0)
+    elif dtype in ("bool", "boolean", "bit"):
+        if name in ("mssql", "sqlserver"):
+            str_expr = f"CASE WHEN {quoted_col} = 1 THEN '1' ELSE '0' END"
+        else:
+            str_expr = f"CASE WHEN {quoted_col} THEN '1' ELSE '0' END"
+    else:
+        str_expr = db.dialect.to_string(quoted_col)
+
+    return f"COALESCE({str_expr}, '<NULL>')"
+
+
+def get_concat_row_expr(
+    db: Database,
+    columns: Sequence[str],
+    schema: Optional[Dict[str, Any]] = None,
+) -> str:
     """Generate SQL expression concatenating column values into a deterministic string."""
-    quoted_cols = [db.dialect.to_string(db.dialect.quote(c)) for c in columns]
-    if len(quoted_cols) == 1:
-        return quoted_cols[0]
+    safe_cols = [
+        _col_to_safe_string_expr(
+            db,
+            c,
+            schema[c].data_type if (schema and c in schema) else None,
+        )
+        for c in columns
+    ]
+    if len(safe_cols) == 1:
+        return safe_cols[0]
 
     name = db.name.lower()
-    if name in ("athena", "trino", "presto", "postgresql", "postgres", "duckdb", "snowflake"):
-        return " || '|' || ".join(quoted_cols)
+    if name in ("athena", "trino", "presto"):
+        # Use array_join to avoid deeply nested '||' AST limits on wide tables (70+ cols)
+        return f"array_join(ARRAY[{', '.join(safe_cols)}], '|')"
+    elif name in ("postgresql", "postgres", "duckdb", "snowflake"):
+        return " || '|' || ".join(safe_cols)
     elif name in ("maxcompute", "odps", "mssql", "sqlserver", "mysql"):
-        return f"CONCAT_WS('|', {', '.join(quoted_cols)})"
+        return f"CONCAT_WS('|', {', '.join(safe_cols)})"
 
-    return " || '|' || ".join(quoted_cols)
+    return " || '|' || ".join(safe_cols)
 
 
 def get_bucket_expr(db: Database, pk_hash_expr: str, bucket_count: int) -> str:
@@ -89,14 +149,14 @@ class DataValidator:
         requested_mode: str,
         primary_keys: Sequence[str],
     ) -> str:
+        if not primary_keys:
+            return "keyless"
+
         req = requested_mode.lower().strip()
         if req in ("hashdiff", "joindiff", "bucket_hash", "keyless"):
             return req
 
         # mode == "auto"
-        if not primary_keys:
-            return "keyless"
-
         # If same database connection/instance -> joindiff
         if source_db is target_db or getattr(source_db, "_conn", None) == getattr(target_db, "_conn", None) is not None:
             return "joindiff"
@@ -122,13 +182,15 @@ class DataValidator:
         bucket_count: int = 64,
         max_mismatch_samples: int = 100,
         float_abs_tol: float = 1e-4,
+        src_schema: Optional[Dict[str, Any]] = None,
+        tgt_schema: Optional[Dict[str, Any]] = None,
     ) -> Tuple[bool, int, int, List[BucketDiff], List[MismatchSample]]:
         """Single-Scan Bucket Checksum execution: 1 query per side, followed by targeted sampling."""
         src_q_table = self._qualify_table(source_db, source_table)
         tgt_q_table = self._qualify_table(target_db, target_table)
 
-        src_pk_expr = get_concat_row_expr(source_db, primary_keys)
-        tgt_pk_expr = get_concat_row_expr(target_db, primary_keys)
+        src_pk_expr = get_concat_row_expr(source_db, primary_keys, schema=src_schema)
+        tgt_pk_expr = get_concat_row_expr(target_db, primary_keys, schema=tgt_schema)
 
         src_pk_hash = source_db.dialect.md5_as_int(src_pk_expr)
         tgt_pk_hash = target_db.dialect.md5_as_int(tgt_pk_expr)
@@ -136,8 +198,8 @@ class DataValidator:
         src_bucket_col = get_bucket_expr(source_db, src_pk_hash, bucket_count)
         tgt_bucket_col = get_bucket_expr(target_db, tgt_pk_hash, bucket_count)
 
-        src_row_expr = get_concat_row_expr(source_db, compared_columns)
-        tgt_row_expr = get_concat_row_expr(target_db, compared_columns)
+        src_row_expr = get_concat_row_expr(source_db, compared_columns, schema=src_schema)
+        tgt_row_expr = get_concat_row_expr(target_db, compared_columns, schema=tgt_schema)
 
         src_row_hash = source_db.dialect.md5_as_int(src_row_expr)
         tgt_row_hash = target_db.dialect.md5_as_int(tgt_row_expr)
@@ -283,13 +345,15 @@ class DataValidator:
         compared_columns: Sequence[str],
         source_where: Optional[str] = None,
         target_where: Optional[str] = None,
+        src_schema: Optional[Dict[str, Any]] = None,
+        tgt_schema: Optional[Dict[str, Any]] = None,
     ) -> Tuple[bool, int, int]:
         """Keyless table fallback: compares count, row hash sum, and distinct row hash count."""
         src_q_table = self._qualify_table(source_db, source_table)
         tgt_q_table = self._qualify_table(target_db, target_table)
 
-        src_row_expr = get_concat_row_expr(source_db, compared_columns)
-        tgt_row_expr = get_concat_row_expr(target_db, compared_columns)
+        src_row_expr = get_concat_row_expr(source_db, compared_columns, schema=src_schema)
+        tgt_row_expr = get_concat_row_expr(target_db, compared_columns, schema=tgt_schema)
 
         src_row_hash = source_db.dialect.md5_as_int(src_row_expr)
         tgt_row_hash = target_db.dialect.md5_as_int(tgt_row_expr)
@@ -341,10 +405,24 @@ class DataValidator:
         pks = list(primary_keys or [])
         excludes = set(c.lower() for c in (exclude_columns or []))
 
-        # Introspect schema if compared_columns not specified
-        if not compared_columns:
+        # Introspect schemas for type-aware hashing and column discovery
+        src_schema = None
+        tgt_schema = None
+        try:
             src_schema = source_db.query_table_schema(tuple(source_table.split(".")))
-            comp_cols = [c for c in src_schema.keys() if c.lower() not in excludes]
+        except Exception as e:
+            logger.debug(f"Could not introspect source schema for type-aware hashing: {e}")
+
+        try:
+            tgt_schema = target_db.query_table_schema(tuple(target_table.split(".")))
+        except Exception as e:
+            logger.debug(f"Could not introspect target schema for type-aware hashing: {e}")
+
+        if not compared_columns:
+            if src_schema:
+                comp_cols = [c for c in src_schema.keys() if c.lower() not in excludes]
+            else:
+                raise RuntimeError(f"Could not determine columns for table {source_table}")
         else:
             comp_cols = [c for c in compared_columns if c.lower() not in excludes]
 
@@ -365,6 +443,8 @@ class DataValidator:
                     bucket_count=bucket_count,
                     max_mismatch_samples=max_mismatch_samples,
                     float_abs_tol=float_abs_tol,
+                    src_schema=src_schema,
+                    tgt_schema=tgt_schema,
                 )
                 elapsed = round(time.time() - start_time, 3)
                 return DataValidationResult(
@@ -391,6 +471,8 @@ class DataValidator:
                     compared_columns=comp_cols,
                     source_where=source_where,
                     target_where=target_where,
+                    src_schema=src_schema,
+                    tgt_schema=tgt_schema,
                 )
                 elapsed = round(time.time() - start_time, 3)
                 return DataValidationResult(

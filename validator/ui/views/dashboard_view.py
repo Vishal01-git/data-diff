@@ -157,7 +157,9 @@ def render_dashboard_view() -> None:
                         f"**Differing Rows:** `{'0' if d_res.passed else d_res.differing_rows_count}`"
                     )
 
-                    if d_res.mismatch_samples:
+                    if d_res.error:
+                        st.error(f"❌ Tier 3 Execution Error: {d_res.error}")
+                    elif d_res.mismatch_samples:
                         st.write(f"##### Mismatch Samples (Top {len(d_res.mismatch_samples)})")
                         m_data = [
                             {
@@ -168,8 +170,10 @@ def render_dashboard_view() -> None:
                             for m in d_res.mismatch_samples
                         ]
                         st.dataframe(m_data, use_container_width=True)
-                    else:
+                    elif d_res.passed:
                         st.success("✅ 100% Data Row Parity! All rows match.")
+                    else:
+                        st.warning(f"⚠️ Data mismatch detected ({d_res.differing_rows_count} differing rows/buckets; no row samples captured).")
                 else:
                     st.info("Tier 3 data validation was skipped or not configured for this table.")
 

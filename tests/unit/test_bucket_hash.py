@@ -222,6 +222,97 @@ class TestBucketHashAndDataValidator(unittest.TestCase):
         mode5 = self.validator._determine_mode(athena_db, mc_db, "hashdiff", ["id"])
         self.assertEqual(mode5, "hashdiff")
 
+        # 5. Even if bucket_hash requested, empty PKs force keyless
+        mode6 = self.validator._determine_mode(athena_db, athena_db, "bucket_hash", [])
+        self.assertEqual(mode6, "keyless")
+
+    def test_athena_binary_null_and_wide_table_concat(self):
+        from data_diff.databases.athena import Dialect as AthenaDialect
+        from data_diff.schema import RawColumnInfo
+        from validator.engine.data_validator import get_concat_row_expr
+
+        athena_db = Athena.__new__(Athena)
+        athena_db._dialect = AthenaDialect()
+
+        schema = {
+            "id": RawColumnInfo(column_name="id", data_type="bigint"),
+            "rowversion": RawColumnInfo(column_name="rowversion", data_type="varbinary"),
+            "tags": RawColumnInfo(column_name="tags", data_type="array<string>"),
+            "created_at": RawColumnInfo(column_name="created_at", data_type="timestamp"),
+            "is_active": RawColumnInfo(column_name="is_active", data_type="boolean"),
+        }
+
+        expr = get_concat_row_expr(
+            athena_db,
+            ["id", "rowversion", "tags", "created_at", "is_active"],
+            schema=schema,
+        )
+        self.assertIn("array_join(ARRAY[", expr)
+        self.assertIn('to_hex("rowversion")', expr)
+        self.assertIn('json_format(cast("tags" as json))', expr)
+        self.assertIn("COALESCE(", expr)
+        self.assertIn("'<NULL>'", expr)
+        self.assertNotIn('cast("rowversion" as varchar)', expr)
+
+    def test_duckdb_binary_and_null_columns_data_diff(self):
+        # Verify real execution with BLOB (binary) and NULL columns in DuckDB
+        self.db.query(
+            """
+            CREATE TABLE src_bin (
+                id INTEGER,
+                payload BLOB,
+                notes VARCHAR
+            );
+            CREATE TABLE tgt_bin (
+                id INTEGER,
+                payload BLOB,
+                notes VARCHAR
+            );
+            INSERT INTO src_bin VALUES
+                (1, '\\xDEADBEEF'::BLOB, NULL),
+                (2, NULL, 'hello');
+            INSERT INTO tgt_bin VALUES
+                (1, '\\xDEADBEEF'::BLOB, NULL),
+                (2, NULL, 'hello');
+            """
+        )
+
+        # Should pass in both bucket_hash and keyless modes without cast error or NULL poisoning
+        res_bh = self.validator.validate(
+            source_db=self.db,
+            target_db=self.db,
+            source_table="src_bin",
+            target_table="tgt_bin",
+            primary_keys=["id"],
+            mode="bucket_hash",
+        )
+        self.assertTrue(res_bh.passed)
+        self.assertEqual(res_bh.total_rows_compared, 2)
+
+        res_kl = self.validator.validate(
+            source_db=self.db,
+            target_db=self.db,
+            source_table="src_bin",
+            target_table="tgt_bin",
+            primary_keys=[],
+            mode="keyless",
+        )
+        self.assertTrue(res_kl.passed)
+        self.assertEqual(res_kl.total_rows_compared, 2)
+
+        # Now introduce a 1-byte difference in BLOB and a NULL -> non-NULL change
+        self.db.query("UPDATE tgt_bin SET notes = 'changed' WHERE id = 1")
+        res_diff = self.validator.validate(
+            source_db=self.db,
+            target_db=self.db,
+            source_table="src_bin",
+            target_table="tgt_bin",
+            primary_keys=["id"],
+            mode="bucket_hash",
+        )
+        self.assertFalse(res_diff.passed)
+        self.assertEqual(len(res_diff.mismatch_samples), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

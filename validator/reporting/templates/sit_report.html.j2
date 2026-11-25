@@ -333,6 +333,11 @@
           {% if tbl.data_result %}
             <div class="tier-section">
               <div class="tier-title">Tier 3 &mdash; Row-Level Data Validation ({{ tbl.data_result.mode_used }})</div>
+              {% if tbl.data_result.error %}
+                <div style="padding: 0.75rem; background-color: rgba(239, 68, 68, 0.1); border: 1px solid var(--fail); border-radius: 6px; margin-bottom: 0.75rem; color: var(--fail);">
+                  <strong>Data Diff Error:</strong> {{ tbl.data_result.error }}
+                </div>
+              {% endif %}
               <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;">
                 Rows Compared: {{ "{:,}".format(tbl.data_result.total_rows_compared) }} &bull;
                 Mismatches: <strong style="color: {{ 'var(--pass)' if tbl.data_result.passed else 'var(--fail)' }}">{{ tbl.data_result.differing_rows_count }}</strong>

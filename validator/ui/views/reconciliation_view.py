@@ -3,6 +3,7 @@
 import time
 import streamlit as st
 
+from validator.config.connections import ConnectionResolver
 from validator.config.manifest import (
     DataDiffConfig,
     DefaultsConfig,
@@ -13,6 +14,7 @@ from validator.config.manifest import (
     TableEndpointConfig,
 )
 from validator.orchestrator.runner import BatchRunner
+from validator.ui.introspect import get_columns_and_types
 from validator.ui.state import (
     add_table_to_queue,
     clear_table_queue,
@@ -50,21 +52,68 @@ def render_reconciliation_view() -> None:
             tgt_table = st.text_input("Target Table Name", placeholder="e.g. curated_db.orders or orders", key="tgt_tbl_input")
             tgt_where = st.text_input("Target WHERE Filter (Optional)", placeholder="e.g. dt >= '2026-10-01'", key="tgt_where_input")
 
+        if st.button("🔎 Fetch Columns from Source Table", help="Introspects table metadata to populate column dropdowns."):
+            if not src_table.strip():
+                st.warning("Enter a Source Table Name first (e.g. db.table_name).")
+            else:
+                with st.spinner(f"Fetching columns for {src_table}..."):
+                    try:
+                        resolver = ConnectionResolver({src_conn: connections[src_conn]})
+                        db = resolver.get_database(src_conn)
+                        parts = src_table.strip().split(".")
+                        schema_part = parts[0] if len(parts) > 1 else (getattr(db, "default_schema", "default") or "default")
+                        tbl_part = parts[-1]
+                        cols_map = get_columns_and_types(db, schema_part, tbl_part)
+                        resolver.close_all()
+                        if cols_map:
+                            st.session_state["fetched_columns"] = list(cols_map.keys())
+                            st.success(f"Loaded {len(cols_map)} columns from `{src_table}`!")
+                        else:
+                            st.warning("No columns returned. Check table name or permissions.")
+                    except Exception as e:
+                        st.error(f"Could not fetch columns: {e}")
+
+        fetched_cols = st.session_state.get("fetched_columns", [])
+
         st.divider()
 
         col_keys, col_opts = st.columns([1.2, 1], gap="medium")
         with col_keys:
             st.subheader("Keys & Partitions")
-            pk_input = st.text_input(
-                "Primary Key Column(s) (Comma-separated)",
-                placeholder="e.g. id, order_id, order_item_id",
-                help="Columns that uniquely identify each row. Leave empty for keyless frequency comparison.",
-            )
-            part_col = st.text_input(
-                "Partition Column (Optional)",
-                placeholder="e.g. dt or date_key",
-                help="Breaks down Tier 1 counts per partition slice.",
-            )
+            if fetched_cols:
+                pks_selected = st.multiselect(
+                    "Primary Key Column(s)",
+                    options=fetched_cols,
+                    help="Select one or more columns that uniquely identify each row.",
+                )
+                exclude_selected = st.multiselect(
+                    "Exclude Columns (Optional)",
+                    options=fetched_cols,
+                    help="Columns to skip during schema/data comparison (e.g. etl_loaded_at).",
+                )
+                part_col = st.selectbox(
+                    "Partition Column (Optional)",
+                    options=[""] + fetched_cols,
+                    help="Breaks down Tier 1 counts per partition slice.",
+                )
+            else:
+                pk_input = st.text_input(
+                    "Primary Key Column(s) (Comma-separated)",
+                    placeholder="e.g. id, order_id, order_item_id",
+                    help="Columns that uniquely identify each row. Leave empty for keyless frequency comparison.",
+                )
+                pks_selected = [k.strip() for k in pk_input.split(",") if k.strip()]
+                exclude_input = st.text_input(
+                    "Exclude Columns (Optional, Comma-separated)",
+                    placeholder="e.g. etl_loaded_at, rowversion",
+                )
+                exclude_selected = [k.strip() for k in exclude_input.split(",") if k.strip()]
+                part_col = st.text_input(
+                    "Partition Column (Optional)",
+                    placeholder="e.g. dt or date_key",
+                    help="Breaks down Tier 1 counts per partition slice.",
+                )
+
             table_task_name = st.text_input(
                 "Task / Alias Name",
                 value=f"{src_table}_vs_{tgt_table}" if src_table and tgt_table else "reconciliation_task",
@@ -89,7 +138,6 @@ def render_reconciliation_view() -> None:
             if not src_table.strip() or not tgt_table.strip():
                 st.error("Please provide both Source Table and Target Table names.")
             else:
-                pks = [k.strip() for k in pk_input.split(",") if k.strip()]
                 t_cfg = TableConfig(
                     name=table_task_name.strip(),
                     source=TableEndpointConfig(
@@ -102,8 +150,9 @@ def render_reconciliation_view() -> None:
                         table=tgt_table.strip(),
                         where=tgt_where.strip() or None,
                     ),
-                    primary_keys=pks,
+                    primary_keys=pks_selected,
                     partition_column=part_col.strip() or None,
+                    exclude_columns=exclude_selected,
                     tiers=tiers,
                     data_diff=DataDiffConfig(mode=diff_mode),
                 )

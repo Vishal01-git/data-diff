@@ -141,6 +141,9 @@ class BatchRunner:
                     src_db = self.resolver.get_database(src_conn_name)
                     tgt_db = self.resolver.get_database(tgt_conn_name)
 
+                    src_bytes_before = getattr(src_db, "total_bytes_scanned", 0) or 0
+                    tgt_bytes_before = getattr(tgt_db, "total_bytes_scanned", 0) or 0
+
                     active_tiers = tbl.tiers or self.manifest.defaults.tiers
 
                     # Tier 1: Count & Volume
@@ -233,9 +236,14 @@ class BatchRunner:
         tbl_bytes_scanned = 0
         tbl_queries = 0
         try:
-            if hasattr(src_db, "last_query_stats") and isinstance(src_db.last_query_stats, dict):
+            if hasattr(src_db, "total_bytes_scanned"):
+                tbl_bytes_scanned += max(0, (getattr(src_db, "total_bytes_scanned", 0) or 0) - src_bytes_before)
+            elif hasattr(src_db, "last_query_stats") and isinstance(src_db.last_query_stats, dict):
                 tbl_bytes_scanned += src_db.last_query_stats.get("data_scanned_in_bytes", 0) or 0
-            if hasattr(tgt_db, "last_query_stats") and isinstance(tgt_db.last_query_stats, dict):
+
+            if hasattr(tgt_db, "total_bytes_scanned"):
+                tbl_bytes_scanned += max(0, (getattr(tgt_db, "total_bytes_scanned", 0) or 0) - tgt_bytes_before)
+            elif hasattr(tgt_db, "last_query_stats") and isinstance(tgt_db.last_query_stats, dict):
                 tbl_bytes_scanned += tgt_db.last_query_stats.get("data_scanned_in_bytes", 0) or 0
         except Exception:
             pass

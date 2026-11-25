@@ -155,6 +155,8 @@ class Athena(Database):
     region_name: Optional[str] = None
     use_glue_schema: bool = True
     last_query_stats: Dict[str, Any] = attrs.field(factory=dict)
+    total_bytes_scanned: int = 0
+    total_queries: int = 0
     _conn: Any = None
 
     def __init__(self, **kw) -> None:
@@ -165,6 +167,8 @@ class Athena(Database):
         self.work_group = kw.get("work_group") or kw.get("workgroup") or "primary"
         self.use_glue_schema = kw.get("use_glue_schema", True)
         self.last_query_stats = {}
+        self.total_bytes_scanned = 0
+        self.total_queries = 0
 
         # Resolve region from kw or host (e.g. athena.us-east-1.amazonaws.com)
         region = kw.get("region_name") or kw.get("region")
@@ -210,14 +214,16 @@ class Athena(Database):
     def _query(self, sql_code: str) -> list:
         cursor = self._conn.cursor()
         cursor.execute(sql_code)
+        rows = cursor.fetchall() if cursor.description else []
+        bytes_scanned = getattr(cursor, "data_scanned_in_bytes", 0) or 0
+        self.total_bytes_scanned = (getattr(self, "total_bytes_scanned", 0) or 0) + int(bytes_scanned)
+        self.total_queries = (getattr(self, "total_queries", 0) or 0) + 1
         self.last_query_stats = {
-            "data_scanned_in_bytes": getattr(cursor, "data_scanned_in_bytes", 0),
+            "data_scanned_in_bytes": bytes_scanned,
             "query_id": getattr(cursor, "query_id", None),
             "execution_time_in_millis": getattr(cursor, "execution_time_in_millis", None),
         }
-        if cursor.description:
-            return cursor.fetchall()
-        return []
+        return rows
 
     def close(self):
         super().close()
