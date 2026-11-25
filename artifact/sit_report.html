@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIT Data Reconciliation Report — ui_run_1795582418</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --pass: #10b981;
+      --fail: #ef4444;
+      --warn: #f59e0b;
+      --info: #3b82f6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      padding: 2rem;
+      line-height: 1.5;
+    }
+    .container { max-width: 1300px; margin: 0 auto; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { font-size: 1.8rem; font-weight: 700; }
+    .status-badge {
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-pass { background-color: rgba(16, 185, 129, 0.2); color: var(--pass); border: 1px solid var(--pass); }
+    .badge-fail { background-color: rgba(239, 68, 68, 0.2); color: var(--fail); border: 1px solid var(--fail); }
+    .badge-warn { background-color: rgba(245, 158, 11, 0.2); color: var(--warn); border: 1px solid var(--warn); }
+    .badge-skip { background-color: rgba(148, 163, 184, 0.2); color: var(--text-muted); border: 1px solid var(--text-muted); }
+    
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .card-label { font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .card-val { font-size: 1.8rem; font-weight: 700; }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      align-items: center;
+    }
+    input[type="text"] {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      flex-grow: 1;
+      outline: none;
+    }
+    select {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      outline: none;
+    }
+
+    .table-item {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+    .table-header {
+      padding: 1rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .table-header:hover { background-color: rgba(255, 255, 255, 0.02); }
+    .table-title { display: flex; align-items: center; gap: 0.75rem; font-weight: 600; font-size: 1.1rem; }
+    .table-meta { color: var(--text-muted); font-size: 0.85rem; }
+
+    .table-body {
+      padding: 1.25rem;
+      border-top: 1px solid var(--border);
+      background-color: rgba(15, 23, 42, 0.4);
+      display: none;
+    }
+    .table-body.open { display: block; }
+
+    .tier-section { margin-bottom: 1.5rem; }
+    .tier-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--info); display: flex; align-items: center; gap: 0.5rem; }
+
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-top: 0.5rem;
+    }
+    table.data-table th, table.data-table td {
+      padding: 0.6rem 0.8rem;
+      border: 1px solid var(--border);
+      text-align: left;
+    }
+    table.data-table th { background-color: var(--card-bg); color: var(--text-muted); }
+    table.data-table tr:nth-child(even) { background-color: rgba(255, 255, 255, 0.02); }
+
+    .diff-minus { color: var(--fail); }
+    .diff-plus { color: var(--pass); }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div>
+      <h1>SIT Data Reconciliation Report</h1>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem;">
+        Run: <strong>ui_run_1795582418</strong> &bull; Completed: 2026-11-25T04:54:06.540192+00:00
+      </p>
+    </div>
+    <div>
+      
+        <span class="status-badge badge-fail">FAILED</span>
+      
+    </div>
+  </header>
+
+  <div class="summary-grid">
+    <div class="card">
+      <div class="card-label">Total Tables</div>
+      <div class="card-val">1</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Passed</div>
+      <div class="card-val" style="color: var(--pass);">0</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Failed</div>
+      <div class="card-val" style="color: var(--fail);">1</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Skipped</div>
+      <div class="card-val" style="color: var(--text-muted);">0</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Rows</div>
+      <div class="card-val">25,543,833</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Duration</div>
+      <div class="card-val">28.206s</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Bytes Scanned</div>
+      <div class="card-val">0</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Queries</div>
+      <div class="card-val">6</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <input type="text" id="searchInput" placeholder="Search table name..." onkeyup="filterTables()">
+    <select id="statusFilter" onchange="filterTables()">
+      <option value="ALL">All Statuses</option>
+      <option value="PASSED">Passed</option>
+      <option value="FAILED">Failed</option>
+      <option value="SKIPPED">Skipped</option>
+    </select>
+  </div>
+
+  <div id="tableList">
+    
+      <div class="table-item" data-name="dev_bi_ap_6107_mart_mygas.dbo_do_header_history_vs_dev_bi_ap_6107_mart_mygas.dbo_do_header_history" data-status="FAILED">
+        <div class="table-header" onclick="toggleDetails(this)">
+          <div class="table-title">
+            <span>dev_bi_ap_6107_mart_mygas.dbo_do_header_history_vs_dev_bi_ap_6107_mart_mygas.dbo_do_header_history</span>
+            
+              <span class="status-badge badge-fail">FAILED</span>
+            
+          </div>
+          <div class="table-meta">
+            dev_bi_ap_6107_mart_mygas.dbo_do_header_history &rarr; dev_bi_ap_6107_mart_mygas.dbo_do_header_history &bull; 28.138s
+          </div>
+        </div>
+
+        <div class="table-body">
+          
+
+          <!-- Tier 1: Count & Volume -->
+          
+            <div class="tier-section">
+              <div class="tier-title">Tier 1 &mdash; Count &amp; Volume Validation</div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Source Count</th>
+                    <th>Target Count</th>
+                    <th>Delta</th>
+                    <th>Delta %</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>25,543,833</td>
+                    <td>25,543,833</td>
+                    <td>+0</td>
+                    <td>0.0%</td>
+                    <td>
+                      
+                        <span style="color: var(--pass);">MATCH</span>
+                      
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              
+            </div>
+          
+
+          <!-- Tier 2: Schema Validation -->
+          
+            <div class="tier-section">
+              <div class="tier-title">Tier 2 &mdash; Cross-Dialect Schema Validation</div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Column</th>
+                    <th>Source Type</th>
+                    <th>Target Type</th>
+                    <th>Canonical Type</th>
+                    <th>Diff Type</th>
+                    <th>Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                    <tr>
+                      <td>do_header_id</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>location_id</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>location_pid</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>doc_no</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>cust_no</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>customer_pid</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>del_date</td>
+                      <td>timestamp</td>
+                      <td>timestamp</td>
+                      <td>TIMESTAMP</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (TIMESTAMP).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>po_no</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>po_header_id</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>tax_applicability</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>ord_date</td>
+                      <td>timestamp</td>
+                      <td>timestamp</td>
+                      <td>TIMESTAMP</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (TIMESTAMP).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>ord_status</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>del_type</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>consign_no</td>
+                      <td>int</td>
+                      <td>int</td>
+                      <td>INT32</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (INT32).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>consign_id</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>cust_type</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>map_ref</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>cyls_tot</td>
+                      <td>int</td>
+                      <td>int</td>
+                      <td>INT32</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (INT32).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>weight_tot</td>
+                      <td>double</td>
+                      <td>double</td>
+                      <td>FLOAT64</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (FLOAT64).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>bu</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>sales_rep</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>do_type</td>
+                      <td>varchar(6)</td>
+                      <td>varchar(6)</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>cmnt1</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>cmnt2</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>cmnt3</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>record_stat</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>doc_type</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>account_no</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>account_id</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>payment_type</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>month_ref</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>invoice_no</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>invoice_head_id</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>type_of_doc</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>agent_no</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>agent_id</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>dealer_no</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>dealer_id</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>del_chge_ind</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>eta_date</td>
+                      <td>timestamp</td>
+                      <td>timestamp</td>
+                      <td>TIMESTAMP</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (TIMESTAMP).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>confirm_date</td>
+                      <td>timestamp</td>
+                      <td>timestamp</td>
+                      <td>TIMESTAMP</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (TIMESTAMP).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>quotation_ref</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>project_no</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>userid</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>workstation</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>source_location</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>auth_status</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>swap_flag</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>al_del_chge_ind</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>has_backorder</td>
+                      <td>boolean</td>
+                      <td>boolean</td>
+                      <td>BOOLEAN</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (BOOLEAN).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>backorder_ref_no</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>back_ordered_flag</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>pda_do_copy</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>created_date</td>
+                      <td>timestamp</td>
+                      <td>timestamp</td>
+                      <td>TIMESTAMP</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (TIMESTAMP).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>last_updated_userid</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>last_updated_date</td>
+                      <td>timestamp</td>
+                      <td>timestamp</td>
+                      <td>TIMESTAMP</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (TIMESTAMP).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>priority</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>write_off</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>sales_doc_no</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>order_service_type</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>cost_allocation_type</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>do_id</td>
+                      <td>bigint</td>
+                      <td>bigint</td>
+                      <td>INT64</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (INT64).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>end_cust_no</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>license_no</td>
+                      <td>string</td>
+                      <td>string</td>
+                      <td>STRING</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (STRING).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>originator_id</td>
+                      <td>int</td>
+                      <td>int</td>
+                      <td>INT32</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (INT32).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>original_originator_id</td>
+                      <td>int</td>
+                      <td>int</td>
+                      <td>INT32</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (INT32).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>req_del_date</td>
+                      <td>timestamp</td>
+                      <td>timestamp</td>
+                      <td>TIMESTAMP</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (TIMESTAMP).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>row_version</td>
+                      <td>binary</td>
+                      <td>binary</td>
+                      <td>BINARY</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (BINARY).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>dwh_insert_date</td>
+                      <td>timestamp</td>
+                      <td>timestamp</td>
+                      <td>TIMESTAMP</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (TIMESTAMP).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>dwh_load_date</td>
+                      <td>timestamp</td>
+                      <td>timestamp</td>
+                      <td>TIMESTAMP</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (TIMESTAMP).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>insert_dt_time</td>
+                      <td>timestamp</td>
+                      <td>timestamp</td>
+                      <td>TIMESTAMP</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (TIMESTAMP).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>update_dt_time</td>
+                      <td>timestamp</td>
+                      <td>timestamp</td>
+                      <td>TIMESTAMP</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (TIMESTAMP).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>ah_flag</td>
+                      <td>int</td>
+                      <td>int</td>
+                      <td>INT32</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (INT32).</td>
+                    </tr>
+                  
+                    <tr>
+                      <td>country_id</td>
+                      <td>int</td>
+                      <td>int</td>
+                      <td>INT32</td>
+                      <td>
+                        
+                          <span style="color: var(--pass);">MATCH</span>
+                        
+                      </td>
+                      <td>Types match (INT32).</td>
+                    </tr>
+                  
+                </tbody>
+              </table>
+            </div>
+          
+
+          <!-- Tier 3: Data Diff -->
+          
+            <div class="tier-section">
+              <div class="tier-title">Tier 3 &mdash; Row-Level Data Validation (keyless)</div>
+              <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.5rem;">
+                Rows Compared: 0 &bull;
+                Mismatches: <strong style="color: var(--fail)">0</strong>
+                
+              </p>
+
+              
+            </div>
+          
+        </div>
+      </div>
+    
+  </div>
+</div>
+
+<script>
+  function toggleDetails(header) {
+    const body = header.nextElementSibling;
+    body.classList.toggle('open');
+  }
+
+  function filterTables() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const st = document.getElementById('statusFilter').value;
+    const items = document.querySelectorAll('.table-item');
+
+    items.forEach(el => {
+      const name = el.getAttribute('data-name');
+      const status = el.getAttribute('data-status');
+      const matchName = !q || name.includes(q);
+      const matchStatus = (st === 'ALL') || (status === st);
+      el.style.display = (matchName && matchStatus) ? 'block' : 'none';
+    });
+  }
+</script>
+</body>
+</html>
