@@ -41,9 +41,11 @@ class DataValidationResult(BaseModel):
     source_table: str
     target_table: str
     mode_used: str  # joindiff, hashdiff, bucket_hash, keyless
+    match_scope: str = "exact"  # exact | source_in_target
     passed: bool = True
     total_rows_compared: int = 0
     differing_rows_count: int = 0
+    extra_target_rows_count: int = 0
     differing_buckets_count: int = 0
     total_buckets: int = 0
     bucket_diffs: List[BucketDiff] = Field(default_factory=list)
@@ -184,7 +186,8 @@ class DataValidator:
         float_abs_tol: float = 1e-4,
         src_schema: Optional[Dict[str, Any]] = None,
         tgt_schema: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[bool, int, int, List[BucketDiff], List[MismatchSample]]:
+        match_scope: str = "exact",
+    ) -> Tuple[bool, int, int, int, List[BucketDiff], List[MismatchSample]]:
         """Single-Scan Bucket Checksum execution: 1 query per side, followed by targeted sampling."""
         src_q_table = self._qualify_table(source_db, source_table)
         tgt_q_table = self._qualify_table(target_db, target_table)
@@ -233,17 +236,24 @@ class DataValidator:
         bucket_diffs: List[BucketDiff] = []
         differing_bucket_ids: List[int] = []
         total_rows = 0
-        diff_count = 0
+        extra_target_rows = 0
 
         for b_id in range(bucket_count):
             s_cnt, s_chk = src_buckets.get(b_id, (0, 0))
             t_cnt, t_chk = tgt_buckets.get(b_id, (0, 0))
             total_rows += s_cnt
 
-            is_match = (s_cnt == t_cnt) and (s_chk == t_chk)
+            if match_scope == "source_in_target":
+                if s_cnt == 0:
+                    extra_target_rows += t_cnt
+                    is_match = True
+                else:
+                    is_match = (s_cnt == t_cnt) and (s_chk == t_chk)
+            else:
+                is_match = (s_cnt == t_cnt) and (s_chk == t_chk)
+
             if not is_match:
                 differing_bucket_ids.append(b_id)
-                diff_count += abs(t_cnt - s_cnt) or 1
 
             bucket_diffs.append(
                 BucketDiff(
@@ -257,7 +267,7 @@ class DataValidator:
             )
 
         if not differing_bucket_ids:
-            return True, total_rows, 0, bucket_diffs, []
+            return True, total_rows, extra_target_rows, 0, bucket_diffs, []
 
         # Sample rows only from differing buckets
         logger.info(f"Sampling mismatched rows from {len(differing_bucket_ids)} differing buckets...")
@@ -268,7 +278,7 @@ class DataValidator:
         tgt_cols_str = ", ".join(target_db.dialect.quote(c) for c in cols_to_fetch)
 
         for b_id in differing_bucket_ids:
-            if len(mismatch_samples) >= max_mismatch_samples:
+            if len(mismatch_samples) >= max_mismatch_samples and match_scope != "source_in_target":
                 break
 
             src_sample_sql = (
@@ -292,7 +302,7 @@ class DataValidator:
             s_map = {tuple(str(r[i]) for i in range(pk_len)): r for r in s_sample_rows}
             t_map = {tuple(str(r[i]) for i in range(pk_len)): r for r in t_sample_rows}
 
-            # Exclusive source
+            # Exclusive source (missing in target) -> always a failure
             for k in set(s_map.keys()) - set(t_map.keys()):
                 if len(mismatch_samples) >= max_mismatch_samples:
                     break
@@ -300,15 +310,19 @@ class DataValidator:
                 k_dict = {primary_keys[i]: row[i] for i in range(pk_len)}
                 mismatch_samples.append(MismatchSample(key_values=k_dict, diff_type="EXCLUSIVE_SOURCE"))
 
-            # Exclusive target
-            for k in set(t_map.keys()) - set(s_map.keys()):
-                if len(mismatch_samples) >= max_mismatch_samples:
-                    break
-                row = t_map[k]
-                k_dict = {primary_keys[i]: row[i] for i in range(pk_len)}
-                mismatch_samples.append(MismatchSample(key_values=k_dict, diff_type="EXCLUSIVE_TARGET"))
+            # Exclusive target (extra in target) -> allowed in source_in_target mode!
+            extra_keys = set(t_map.keys()) - set(s_map.keys())
+            if match_scope == "source_in_target":
+                extra_target_rows += len(extra_keys)
+            else:
+                for k in extra_keys:
+                    if len(mismatch_samples) >= max_mismatch_samples:
+                        break
+                    row = t_map[k]
+                    k_dict = {primary_keys[i]: row[i] for i in range(pk_len)}
+                    mismatch_samples.append(MismatchSample(key_values=k_dict, diff_type="EXCLUSIVE_TARGET"))
 
-            # Common keys with differing values
+            # Common keys with differing values -> always a failure
             for k in set(s_map.keys()) & set(t_map.keys()):
                 if len(mismatch_samples) >= max_mismatch_samples:
                     break
@@ -333,8 +347,14 @@ class DataValidator:
                         )
                     )
 
-        passed = len(differing_bucket_ids) == 0
-        return passed, total_rows, len(differing_bucket_ids), bucket_diffs, mismatch_samples
+        if match_scope == "source_in_target":
+            passed = len(mismatch_samples) == 0
+            actual_diff_buckets = 0 if passed else len(differing_bucket_ids)
+        else:
+            passed = len(differing_bucket_ids) == 0
+            actual_diff_buckets = len(differing_bucket_ids)
+
+        return passed, total_rows, extra_target_rows, actual_diff_buckets, bucket_diffs, mismatch_samples
 
     def _validate_keyless(
         self,
@@ -347,8 +367,11 @@ class DataValidator:
         target_where: Optional[str] = None,
         src_schema: Optional[Dict[str, Any]] = None,
         tgt_schema: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[bool, int, int]:
-        """Keyless table fallback: compares count, row hash sum, and distinct row hash count."""
+        match_scope: str = "exact",
+        bucket_count: int = 64,
+        max_mismatch_samples: int = 100,
+    ) -> Tuple[bool, int, int, int, List[MismatchSample]]:
+        """Keyless table validation: compares row hash frequencies across buckets and extracts mismatch samples."""
         src_q_table = self._qualify_table(source_db, source_table)
         tgt_q_table = self._qualify_table(target_db, target_table)
 
@@ -358,6 +381,7 @@ class DataValidator:
         src_row_hash = source_db.dialect.md5_as_int(src_row_expr)
         tgt_row_hash = target_db.dialect.md5_as_int(tgt_row_expr)
 
+        # Fast 2-query check when exact parity is requested
         src_sql = (
             f"SELECT COUNT(*), COUNT(DISTINCT {src_row_hash}), "
             f"COALESCE(SUM(CAST({src_row_hash} AS DECIMAL(38, 0))), 0) "
@@ -378,9 +402,111 @@ class DataValidator:
         src_cnt, src_dist, src_sum = int(src_res[0]), int(src_res[1]), int(src_res[2])
         tgt_cnt, tgt_dist, tgt_sum = int(tgt_res[0]), int(tgt_res[1]), int(tgt_res[2])
 
-        is_match = (src_cnt == tgt_cnt) and (src_dist == tgt_dist) and (src_sum == tgt_sum)
-        diff_cnt = abs(tgt_cnt - src_cnt) or (0 if is_match else 1)
-        return is_match, src_cnt, diff_cnt
+        if (src_cnt == tgt_cnt) and (src_dist == tgt_dist) and (src_sum == tgt_sum):
+            return True, src_cnt, 0, 0, []
+
+        # Drill down using deterministic row_hash buckets so we never OOM on large tables
+        logger.info("Keyless checksums differ (or subset mode active); drilling down via hash buckets for sample rows...")
+        src_b_expr = get_bucket_expr(source_db, src_row_hash, bucket_count)
+        tgt_b_expr = get_bucket_expr(target_db, tgt_row_hash, bucket_count)
+
+        src_bsql = (
+            f"SELECT {src_b_expr} AS b_id, COUNT(*), COALESCE(SUM(CAST({src_row_hash} AS DECIMAL(38, 0))), 0) "
+            f"FROM {src_q_table} {f'WHERE {source_where}' if source_where else ''} GROUP BY {src_b_expr}"
+        )
+        tgt_bsql = (
+            f"SELECT {tgt_b_expr} AS b_id, COUNT(*), COALESCE(SUM(CAST({tgt_row_hash} AS DECIMAL(38, 0))), 0) "
+            f"FROM {tgt_q_table} {f'WHERE {target_where}' if target_where else ''} GROUP BY {tgt_b_expr}"
+        )
+
+        with ThreadPoolExecutor(max_workers=self.max_concurrency) as executor:
+            sb_fut = executor.submit(source_db.query, src_bsql, list)
+            tb_fut = executor.submit(target_db.query, tgt_bsql, list)
+            sb_rows = sb_fut.result()
+            tb_rows = tb_fut.result()
+
+        sb_map = {int(r[0]): (int(r[1]), int(r[2])) for r in sb_rows if r[0] is not None}
+        tb_map = {int(r[0]): (int(r[1]), int(r[2])) for r in tb_rows if r[0] is not None}
+
+        diff_buckets: List[int] = []
+        extra_target_rows = 0
+        for b_id in range(bucket_count):
+            s_c, s_s = sb_map.get(b_id, (0, 0))
+            t_c, t_s = tb_map.get(b_id, (0, 0))
+            if match_scope == "source_in_target":
+                if s_c == 0:
+                    extra_target_rows += t_c
+                elif (s_c != t_c) or (s_s != t_s):
+                    diff_buckets.append(b_id)
+            else:
+                if (s_c != t_c) or (s_s != t_s):
+                    diff_buckets.append(b_id)
+
+        mismatch_samples: List[MismatchSample] = []
+        missing_in_target_count = 0
+        cols_preview = list(compared_columns[:6])  # Show up to 6 key columns for keyless sample context
+        src_cols_sql = ", ".join(source_db.dialect.quote(c) for c in cols_preview)
+        tgt_cols_sql = ", ".join(target_db.dialect.quote(c) for c in cols_preview)
+
+        for b_id in diff_buckets:
+            if len(mismatch_samples) >= max_mismatch_samples and match_scope != "source_in_target":
+                break
+
+            sf_sql = (
+                f"SELECT {src_row_hash} AS h, COUNT(*) FROM {src_q_table} "
+                f"WHERE {src_b_expr} = {b_id} {f'AND ({source_where})' if source_where else ''} "
+                f"GROUP BY {src_row_hash}"
+            )
+            tf_sql = (
+                f"SELECT {tgt_row_hash} AS h, COUNT(*) FROM {tgt_q_table} "
+                f"WHERE {tgt_b_expr} = {b_id} {f'AND ({target_where})' if target_where else ''} "
+                f"GROUP BY {tgt_row_hash}"
+            )
+            with ThreadPoolExecutor(max_workers=self.max_concurrency) as executor:
+                sf_fut = executor.submit(source_db.query, sf_sql, list)
+                tf_fut = executor.submit(target_db.query, tf_sql, list)
+                sf_map = {int(r[0]): int(r[1]) for r in sf_fut.result() if r[0] is not None}
+                tf_map = {int(r[0]): int(r[1]) for r in tf_fut.result() if r[0] is not None}
+
+            # Hashes missing or with lower frequency in target
+            src_only_hashes = [h for h, cnt in sf_map.items() if cnt > tf_map.get(h, 0)]
+            for h in src_only_hashes:
+                missing_in_target_count += sf_map[h] - tf_map.get(h, 0)
+
+            if src_only_hashes and len(mismatch_samples) < max_mismatch_samples:
+                hash_list = ", ".join(str(h) for h in src_only_hashes[:25])
+                sample_q = (
+                    f"SELECT {src_cols_sql} FROM {src_q_table} "
+                    f"WHERE {src_b_expr} = {b_id} AND {src_row_hash} IN ({hash_list}) "
+                    f"{f'AND ({source_where})' if source_where else ''} LIMIT {max_mismatch_samples - len(mismatch_samples)}"
+                )
+                for row in source_db.query(sample_q, list):
+                    row_dict = {cols_preview[i]: row[i] for i in range(len(cols_preview))}
+                    mismatch_samples.append(MismatchSample(key_values=row_dict, diff_type="EXCLUSIVE_SOURCE"))
+
+            tgt_only_hashes = [h for h, cnt in tf_map.items() if cnt > sf_map.get(h, 0)]
+            if match_scope == "source_in_target":
+                for h in tgt_only_hashes:
+                    extra_target_rows += tf_map[h] - sf_map.get(h, 0)
+            elif tgt_only_hashes and len(mismatch_samples) < max_mismatch_samples:
+                hash_list = ", ".join(str(h) for h in tgt_only_hashes[:25])
+                sample_q = (
+                    f"SELECT {tgt_cols_sql} FROM {tgt_q_table} "
+                    f"WHERE {tgt_b_expr} = {b_id} AND {tgt_row_hash} IN ({hash_list}) "
+                    f"{f'AND ({target_where})' if target_where else ''} LIMIT {max_mismatch_samples - len(mismatch_samples)}"
+                )
+                for row in target_db.query(sample_q, list):
+                    row_dict = {cols_preview[i]: row[i] for i in range(len(cols_preview))}
+                    mismatch_samples.append(MismatchSample(key_values=row_dict, diff_type="EXCLUSIVE_TARGET"))
+
+        if match_scope == "source_in_target":
+            is_match = missing_in_target_count == 0
+            diff_cnt = missing_in_target_count
+        else:
+            is_match = (src_cnt == tgt_cnt) and (src_dist == tgt_dist) and (src_sum == tgt_sum)
+            diff_cnt = max(abs(tgt_cnt - src_cnt), len(mismatch_samples)) if not is_match else 0
+
+        return is_match, src_cnt, extra_target_rows, diff_cnt, mismatch_samples
 
     def validate(
         self,
@@ -395,6 +521,7 @@ class DataValidator:
         source_where: Optional[str] = None,
         target_where: Optional[str] = None,
         mode: str = "auto",
+        match_scope: str = "exact",
         bucket_count: int = 64,
         max_mismatch_samples: int = 100,
         float_abs_tol: float = 1e-4,
@@ -427,11 +554,11 @@ class DataValidator:
             comp_cols = [c for c in compared_columns if c.lower() not in excludes]
 
         effective_mode = self._determine_mode(source_db, target_db, mode, pks)
-        logger.info(f"Running Tier 3 Data Validation for {table_label} (mode={effective_mode})...")
+        logger.info(f"Running Tier 3 Data Validation for {table_label} (mode={effective_mode}, scope={match_scope})...")
 
         try:
             if effective_mode == "bucket_hash":
-                passed, total_rows, diff_buckets, bucket_diffs, samples = self._validate_bucket_hash(
+                passed, total_rows, extra_tgt_rows, diff_buckets, bucket_diffs, samples = self._validate_bucket_hash(
                     source_db=source_db,
                     target_db=target_db,
                     source_table=source_table,
@@ -445,6 +572,7 @@ class DataValidator:
                     float_abs_tol=float_abs_tol,
                     src_schema=src_schema,
                     tgt_schema=tgt_schema,
+                    match_scope=match_scope,
                 )
                 elapsed = round(time.time() - start_time, 3)
                 return DataValidationResult(
@@ -452,9 +580,11 @@ class DataValidator:
                     source_table=source_table,
                     target_table=target_table,
                     mode_used=effective_mode,
+                    match_scope=match_scope,
                     passed=passed,
                     total_rows_compared=total_rows,
                     differing_rows_count=len(samples) if samples else (0 if passed else diff_buckets),
+                    extra_target_rows_count=extra_tgt_rows,
                     differing_buckets_count=diff_buckets,
                     total_buckets=bucket_count,
                     bucket_diffs=bucket_diffs,
@@ -463,7 +593,7 @@ class DataValidator:
                 )
 
             elif effective_mode == "keyless":
-                passed, total_rows, diff_cnt = self._validate_keyless(
+                passed, total_rows, extra_tgt_rows, diff_cnt, samples = self._validate_keyless(
                     source_db=source_db,
                     target_db=target_db,
                     source_table=source_table,
@@ -473,6 +603,9 @@ class DataValidator:
                     target_where=target_where,
                     src_schema=src_schema,
                     tgt_schema=tgt_schema,
+                    match_scope=match_scope,
+                    bucket_count=bucket_count,
+                    max_mismatch_samples=max_mismatch_samples,
                 )
                 elapsed = round(time.time() - start_time, 3)
                 return DataValidationResult(
@@ -480,9 +613,12 @@ class DataValidator:
                     source_table=source_table,
                     target_table=target_table,
                     mode_used=effective_mode,
+                    match_scope=match_scope,
                     passed=passed,
                     total_rows_compared=total_rows,
                     differing_rows_count=diff_cnt,
+                    extra_target_rows_count=extra_tgt_rows,
+                    mismatch_samples=samples,
                     execution_time_seconds=elapsed,
                 )
 

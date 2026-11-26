@@ -179,6 +179,7 @@ class CountValidator:
         partition_column: Optional[str] = None,
         profile_columns: Optional[List[str]] = None,
         threshold_pct: float = 0.0,
+        match_scope: str = "exact",
     ) -> CountValidationResult:
         """Run complete Tier 1 Count & Volume validation."""
         start_time = time.time()
@@ -194,7 +195,10 @@ class CountValidator:
             count_diff = tgt_count - src_count
             base_count = max(src_count, 1)
             count_diff_pct = abs(count_diff) / base_count * 100.0
-            passed = count_diff_pct <= threshold_pct
+            if match_scope == "source_in_target":
+                passed = tgt_count >= src_count or count_diff_pct <= threshold_pct
+            else:
+                passed = count_diff_pct <= threshold_pct
 
             # Partition breakdown if configured
             partition_diffs: List[PartitionCountDiff] = []
@@ -222,10 +226,11 @@ class CountValidator:
                     s_c = src_parts.get(key)
                     t_c = tgt_parts.get(key)
                     if s_c is None:
-                        status = "MISSING_IN_SOURCE"
+                        status = "EXTRA_IN_TARGET" if match_scope == "source_in_target" else "MISSING_IN_SOURCE"
                         delta = t_c or 0
                         pct = 100.0
-                        passed = False
+                        if match_scope != "source_in_target":
+                            passed = False
                     elif t_c is None:
                         status = "MISSING_IN_TARGET"
                         delta = -(s_c or 0)
@@ -235,9 +240,14 @@ class CountValidator:
                         delta = t_c - s_c
                         base = max(s_c, 1)
                         pct = abs(delta) / base * 100.0
-                        status = "MATCH" if delta == 0 else "MISMATCH"
-                        if pct > threshold_pct:
-                            passed = False
+                        if match_scope == "source_in_target":
+                            status = "MATCH" if t_c >= s_c else "MISMATCH"
+                            if t_c < s_c and pct > threshold_pct:
+                                passed = False
+                        else:
+                            status = "MATCH" if delta == 0 else "MISMATCH"
+                            if pct > threshold_pct:
+                                passed = False
 
                     partition_diffs.append(
                         PartitionCountDiff(

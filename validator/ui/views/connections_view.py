@@ -10,7 +10,7 @@ from validator.ui.state import delete_connection, get_connections, save_connecti
 def render_connections_view() -> None:
     """Render the Visual Connection Manager page."""
     st.header("🔌 Database Connection Manager")
-    st.caption("Configure and test database connections without editing code or YAML files.")
+    st.caption("Configure, test, and save database connections locally (~/.data-validator/connections.json) so they persist across refreshes.")
 
     col_form, col_list = st.columns([1.2, 1], gap="large")
 

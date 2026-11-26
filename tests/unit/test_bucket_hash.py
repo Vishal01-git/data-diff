@@ -313,6 +313,83 @@ class TestBucketHashAndDataValidator(unittest.TestCase):
         self.assertFalse(res_diff.passed)
         self.assertEqual(len(res_diff.mismatch_samples), 1)
 
+    def test_subset_mode_bucket_hash_and_keyless(self):
+        # Source has 3 rows, Target has 6 rows (all 3 source rows + 3 extra target rows)
+        self.db.query(
+            """
+            CREATE TABLE src_sub (id INTEGER, val VARCHAR);
+            CREATE TABLE tgt_sub (id INTEGER, val VARCHAR);
+            INSERT INTO src_sub VALUES (1, 'a'), (2, 'b'), (3, 'c');
+            INSERT INTO tgt_sub VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e'), (6, 'f');
+            """
+        )
+
+        # 1. Exact mode fails due to extra target rows
+        res_exact = self.validator.validate(
+            source_db=self.db,
+            target_db=self.db,
+            source_table="src_sub",
+            target_table="tgt_sub",
+            primary_keys=["id"],
+            mode="bucket_hash",
+            match_scope="exact",
+        )
+        self.assertFalse(res_exact.passed)
+
+        # 2. Subset mode (source_in_target) passes!
+        res_sub_bh = self.validator.validate(
+            source_db=self.db,
+            target_db=self.db,
+            source_table="src_sub",
+            target_table="tgt_sub",
+            primary_keys=["id"],
+            mode="bucket_hash",
+            match_scope="source_in_target",
+        )
+        self.assertTrue(res_sub_bh.passed)
+        self.assertEqual(res_sub_bh.total_rows_compared, 3)
+        self.assertGreaterEqual(res_sub_bh.extra_target_rows_count, 3)
+
+        # 3. Subset mode in keyless passes!
+        res_sub_kl = self.validator.validate(
+            source_db=self.db,
+            target_db=self.db,
+            source_table="src_sub",
+            target_table="tgt_sub",
+            primary_keys=[],
+            mode="keyless",
+            match_scope="source_in_target",
+        )
+        self.assertTrue(res_sub_kl.passed)
+
+        # 4. Corrupt 1 source row in target -> subset mode must fail and extract sample
+        self.db.query("UPDATE tgt_sub SET val = 'CORRUPTED' WHERE id = 2")
+        res_sub_fail = self.validator.validate(
+            source_db=self.db,
+            target_db=self.db,
+            source_table="src_sub",
+            target_table="tgt_sub",
+            primary_keys=["id"],
+            mode="bucket_hash",
+            match_scope="source_in_target",
+        )
+        self.assertFalse(res_sub_fail.passed)
+        self.assertEqual(len(res_sub_fail.mismatch_samples), 1)
+        self.assertEqual(res_sub_fail.mismatch_samples[0].column_diffs["val"], ("b", "CORRUPTED"))
+
+        # 5. Keyless mismatch sample extraction
+        res_kl_fail = self.validator.validate(
+            source_db=self.db,
+            target_db=self.db,
+            source_table="src_sub",
+            target_table="tgt_sub",
+            primary_keys=[],
+            mode="keyless",
+            match_scope="source_in_target",
+        )
+        self.assertFalse(res_kl_fail.passed)
+        self.assertGreaterEqual(len(res_kl_fail.mismatch_samples), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

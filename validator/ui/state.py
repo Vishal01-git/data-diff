@@ -1,15 +1,24 @@
 """Session state initialization and persistence for Data Validator UI."""
 
-from typing import Any, Dict, List, Optional
+from typing import Dict
+import uuid
 import streamlit as st
 
 from validator.config.manifest import ConnectionConfig, TableConfig
+from validator.ui.storage import (
+    load_saved_connections,
+    save_connections_to_disk,
+)
 
 
 def init_session_state() -> None:
-    """Initialize persistent Streamlit session state keys with default values."""
+    """Initialize persistent Streamlit session state keys with per-session isolation."""
+    if "session_id" not in st.session_state:
+        st.session_state["session_id"] = uuid.uuid4().hex[:8]
+
     if "connections" not in st.session_state:
-        st.session_state["connections"] = {}
+        # Auto-load saved connections from ~/.data-validator/connections.json
+        st.session_state["connections"] = load_saved_connections()
 
     if "connection_status" not in st.session_state:
         st.session_state["connection_status"] = {}
@@ -19,6 +28,9 @@ def init_session_state() -> None:
 
     if "current_result" not in st.session_state:
         st.session_state["current_result"] = None
+
+    if "last_run_logs" not in st.session_state:
+        st.session_state["last_run_logs"] = []
 
     if "selected_table_idx" not in st.session_state:
         st.session_state["selected_table_idx"] = 0
@@ -34,16 +46,18 @@ def get_connections() -> Dict[str, ConnectionConfig]:
 
 
 def save_connection(name: str, config: ConnectionConfig) -> None:
-    """Save or update a named connection in session state."""
+    """Save or update a named connection in session state and persist to local disk."""
     init_session_state()
     st.session_state["connections"][name] = config
+    save_connections_to_disk(st.session_state["connections"])
 
 
 def delete_connection(name: str) -> None:
-    """Delete a named connection from session state."""
+    """Delete a named connection from session state and local disk."""
     init_session_state()
     if name in st.session_state["connections"]:
         del st.session_state["connections"][name]
+        save_connections_to_disk(st.session_state["connections"])
     if name in st.session_state["connection_status"]:
         del st.session_state["connection_status"][name]
 
@@ -51,7 +65,6 @@ def delete_connection(name: str) -> None:
 def add_table_to_queue(table_config: TableConfig) -> None:
     """Add a table reconciliation task to the active batch queue."""
     init_session_state()
-    # Replace if table name exists, else append
     existing = [i for i, t in enumerate(st.session_state["table_queue"]) if t.name == table_config.name]
     if existing:
         st.session_state["table_queue"][existing[0]] = table_config

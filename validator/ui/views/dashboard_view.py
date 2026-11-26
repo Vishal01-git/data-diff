@@ -151,31 +151,65 @@ def render_dashboard_view() -> None:
             with t3:
                 if tbl_match.data_result:
                     d_res = tbl_match.data_result
+                    scope_badge = getattr(d_res, "match_scope", "exact")
+                    extra_cnt = getattr(d_res, "extra_target_rows_count", 0)
                     st.write(
                         f"**Mode Used:** `{d_res.mode_used}` | "
-                        f"**Rows Compared:** `{d_res.total_rows_compared:,}` | "
+                        f"**Match Scope:** `{scope_badge}` | "
+                        f"**Source Rows Compared:** `{d_res.total_rows_compared:,}` | "
                         f"**Differing Rows:** `{'0' if d_res.passed else d_res.differing_rows_count}`"
+                        + (f" | **Extra Target Rows (Allowed):** `{extra_cnt:,}`" if scope_badge == "source_in_target" else "")
                     )
 
                     if d_res.error:
                         st.error(f"❌ Tier 3 Execution Error: {d_res.error}")
                     elif d_res.mismatch_samples:
-                        st.write(f"##### Mismatch Samples (Top {len(d_res.mismatch_samples)})")
-                        m_data = [
-                            {
-                                "Diff Type": m.diff_type,
-                                "Primary Key": str(m.key_values),
-                                "Column Differences": str(m.column_diffs) if m.column_diffs else "-",
-                            }
-                            for m in d_res.mismatch_samples
-                        ]
-                        st.dataframe(m_data, use_container_width=True)
+                        st.write(f"##### 🔍 Exact Row & Column Mismatches (Top {len(d_res.mismatch_samples)} Rows)")
+                        m_rows = []
+                        for m in d_res.mismatch_samples:
+                            pk_display = ", ".join(f"{k}={v}" for k, v in m.key_values.items())
+                            diff_badge = (
+                                "🔴 MISSING IN TARGET"
+                                if m.diff_type == "EXCLUSIVE_SOURCE"
+                                else ("🟡 EXTRA IN TARGET" if m.diff_type == "EXCLUSIVE_TARGET" else "🟠 VALUE DIFF")
+                            )
+                            if m.column_diffs:
+                                for col_name, (s_val, t_val) in m.column_diffs.items():
+                                    m_rows.append(
+                                        {
+                                            "Diff Type": diff_badge,
+                                            "Row Key / Sample": pk_display,
+                                            "Column": col_name,
+                                            "Source Value": str(s_val),
+                                            "Target Value": str(t_val),
+                                        }
+                                    )
+                            else:
+                                m_rows.append(
+                                    {
+                                        "Diff Type": diff_badge,
+                                        "Row Key / Sample": pk_display,
+                                        "Column": "(Entire Row)",
+                                        "Source Value": "Present" if m.diff_type == "EXCLUSIVE_SOURCE" else "Missing",
+                                        "Target Value": "Missing" if m.diff_type == "EXCLUSIVE_SOURCE" else "Present",
+                                    }
+                                )
+                        st.dataframe(m_rows, use_container_width=True)
                     elif d_res.passed:
-                        st.success("✅ 100% Data Row Parity! All rows match.")
+                        if scope_badge == "source_in_target":
+                            st.success(f"✅ Subset Verified! All {d_res.total_rows_compared:,} Source rows matched in Target.")
+                        else:
+                            st.success("✅ 100% Data Row Parity! All rows match.")
                     else:
                         st.warning(f"⚠️ Data mismatch detected ({d_res.differing_rows_count} differing rows/buckets; no row samples captured).")
                 else:
                     st.info("Tier 3 data validation was skipped or not configured for this table.")
+
+    # Optional Backend Execution Logs Expander
+    last_logs = st.session_state.get("last_run_logs", [])
+    if last_logs:
+        with st.expander("📡 View Last Run Backend Execution Logs", expanded=False):
+            st.code("\n".join(last_logs[-100:]), language="log")
 
     st.divider()
 

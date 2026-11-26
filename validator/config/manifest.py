@@ -59,6 +59,7 @@ class DataDiffConfig(BaseModel):
     """Tier 3 row validation settings."""
 
     mode: str = "auto"  # auto | hashdiff | joindiff | bucket_hash | keyless
+    match_scope: str = "exact"  # exact | source_in_target
     bucket_count: int = 64
     float_abs_tol: float = 0.0001
     normalize_timestamps_utc: bool = True
@@ -103,6 +104,7 @@ class TableConfig(BaseModel):
     column_mapping: Dict[str, str] = Field(default_factory=dict)
     threshold_pct: float = 0.0
     tiers: Optional[List[str]] = None
+    match_scope: Optional[str] = None
     data_diff: Optional[DataDiffConfig] = None
     allow_extra_target_columns: bool = False
 

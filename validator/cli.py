@@ -557,7 +557,7 @@ def check_counts(
 @app.command(name="ui")
 def ui(
     port: int = typer.Option(8501, "--port", "-p", help="Port to run Streamlit web server on."),
-    host: str = typer.Option("localhost", "--host", help="Host address to bind to."),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host address to bind to (default strictly local 127.0.0.1)."),
 ) -> None:
     """Launch the interactive web-based UI application in your browser."""
     import subprocess

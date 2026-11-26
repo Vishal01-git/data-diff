@@ -89,12 +89,14 @@ class BatchRunner:
         max_workers: int = 4,
         resume: bool = False,
         include_sample_values: Optional[bool] = None,
+        progress_callback: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         self.manifest = manifest
         self.resolver = resolver or ConnectionResolver(manifest.connections)
         self.checkpoint = checkpoint_tracker or CheckpointTracker(manifest.run_name)
         self.max_workers = max_workers
         self.resume = resume
+        self.progress_callback = progress_callback
         if include_sample_values is not None:
             self.include_sample_values = include_sample_values
         else:
@@ -145,10 +147,15 @@ class BatchRunner:
                     tgt_bytes_before = getattr(tgt_db, "total_bytes_scanned", 0) or 0
 
                     active_tiers = tbl.tiers or self.manifest.defaults.tiers
+                    dd_cfg = tbl.data_diff or self.manifest.defaults.data_diff
+                    match_scope = tbl.match_scope or dd_cfg.match_scope
+
+                    if self.progress_callback:
+                        self.progress_callback(tbl.name, "RUNNING")
 
                     # Tier 1: Count & Volume
                     if "count" in active_tiers:
-                        logger.debug(f"[{tbl.name}] Running Tier 1 Count Validation...")
+                        logger.info(f"[{tbl.name}] Running Tier 1 Count Validation (scope={match_scope})...")
                         count_res = retry_with_backoff(
                             lambda: self.count_validator.validate(
                                 source_db=src_db,
@@ -160,6 +167,7 @@ class BatchRunner:
                                 target_where=tbl.target.where,
                                 partition_column=tbl.partition_column,
                                 threshold_pct=tbl.threshold_pct,
+                                match_scope=match_scope,
                             )
                         )
                         if not count_res.passed:
@@ -167,7 +175,7 @@ class BatchRunner:
 
                     # Tier 2: Schema Validation
                     if "schema" in active_tiers:
-                        logger.debug(f"[{tbl.name}] Running Tier 2 Schema Validation...")
+                        logger.info(f"[{tbl.name}] Running Tier 2 Schema Validation...")
                         schema_res = retry_with_backoff(
                             lambda: self.schema_validator.validate(
                                 source_db=src_db,
@@ -194,7 +202,11 @@ class BatchRunner:
                             )
                             skip_data = True
 
-                        if count_res and count_res.count_diff_pct > ff_cfg.skip_data_if_count_diff_pct_gt:
+                        if (
+                            count_res
+                            and not count_res.passed
+                            and count_res.count_diff_pct > ff_cfg.skip_data_if_count_diff_pct_gt
+                        ):
                             logger.warning(
                                 f"[{tbl.name}] Skipping Tier 3 Data Diff: count diff {count_res.count_diff_pct:.1f}% "
                                 f"> threshold {ff_cfg.skip_data_if_count_diff_pct_gt}%."
@@ -202,8 +214,7 @@ class BatchRunner:
                             skip_data = True
 
                         if not skip_data:
-                            logger.debug(f"[{tbl.name}] Running Tier 3 Data Diff...")
-                            dd_cfg = tbl.data_diff or self.manifest.defaults.data_diff
+                            logger.info(f"[{tbl.name}] Running Tier 3 Data Diff (mode={dd_cfg.mode}, scope={match_scope})...")
                             data_res = retry_with_backoff(
                                 lambda: self.data_validator.validate(
                                     source_db=src_db,
@@ -216,6 +227,7 @@ class BatchRunner:
                                     source_where=tbl.source.where,
                                     target_where=tbl.target.where,
                                     mode=dd_cfg.mode,
+                                    match_scope=match_scope,
                                     bucket_count=dd_cfg.bucket_count,
                                     max_mismatch_samples=dd_cfg.max_mismatch_samples,
                                     float_abs_tol=dd_cfg.float_abs_tol,
@@ -296,6 +308,9 @@ class BatchRunner:
             passed=overall_passed,
             result_data=result.model_dump(),
         )
+
+        if self.progress_callback:
+            self.progress_callback(tbl.name, status)
 
         return result
 
